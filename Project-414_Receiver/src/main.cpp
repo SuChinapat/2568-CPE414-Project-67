@@ -214,7 +214,7 @@ void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   
   // 1. เปิด Serial กลับมา (เปลี่ยนเป็น 115200)
-  Serial.begin(9600); 
+  Serial.begin(115200); 
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
