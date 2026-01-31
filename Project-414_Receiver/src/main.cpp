@@ -134,7 +134,7 @@ void radarTask(void *parameter) {
       myServo.write(currentAngle);
       currentDistance = measureDistance();
       currentAngle += sweepDir;
-      if (currentAngle >= 180) sweepDir = -1;
+      if (currentAngle >= 360) sweepDir = -1; // เดิม 180
       if (currentAngle <= 0) sweepDir = 1;
       vTaskDelay(30 / portTICK_PERIOD_MS);
     }
@@ -164,9 +164,15 @@ void buzzerTask(void *parameter) {
 void messageReceived(String &topic, String &payload) {
   // ไม่ต้อง Serial Print เยอะ เพื่อลด Latency
   if (payload.startsWith("J")) {
-    isJoyMode = true;             
-    String val = payload.substring(1); 
-    joyTargetAngle = val.toInt();
+    isJoyMode = true;
+    String val = payload.substring(1);
+    int angle = val.toInt();
+    
+    // แก้ตรงนี้
+    if (angle < 0) angle = 0;
+    if (angle > 360) angle = 360; // ขยายลิมิตเป็น 360
+    
+    targetAngle = angle;
   }
   else if (payload == "AUTO") isJoyMode = false;
   else if (payload == "1") isSystemArmed = true;

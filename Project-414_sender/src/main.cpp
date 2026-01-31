@@ -71,9 +71,8 @@ void joystickTask(void *parameter) {
     // 1. อ่านค่า Analog (0 - 4095)
     int rawX = analogRead(JOY_X_PIN);
 
-    // 2. แปลงค่า (Map) จาก 0-4095 เป็น 0-180 องศา
-    // หมายเหตุ: ถ้าหมุนแล้วทิศทางกลับกัน ให้สลับ 0, 180 เป็น 180, 0
-    int mapAngle = map(rawX, 0, 4095, 0, 180);
+    // 2. แปลงค่า (Map) จาก 0-4095 เป็น 0-360 องศา
+    int mapAngle = map(rawX, 0, 4095, 0, 360);
 
     // 3. กรองค่าสั่น (Noise Filter)
     // ส่งค่าเมื่อมีการเปลี่ยนแปลงเกิน threshold หรือพึ่งเริ่มทำงาน
