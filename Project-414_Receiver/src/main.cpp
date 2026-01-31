@@ -172,7 +172,7 @@ void messageReceived(String &topic, String &payload) {
     if (angle < 0) angle = 0;
     if (angle > 360) angle = 360; // ขยายลิมิตเป็น 360
     
-    targetAngle = angle;
+    joyTargetAngle = angle;
   }
   else if (payload == "AUTO") isJoyMode = false;
   else if (payload == "1") isSystemArmed = true;
