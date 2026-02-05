@@ -5,7 +5,8 @@
 #include <ESP32Servo.h> 
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
-#include "pitches.h"
+#include "pitches.h" // อย่าลืมไฟล์นี้นะครับ
+
 // --- Pin Config ---
 #define BUZZER_PIN 5
 #define TRIG_PIN 12
@@ -16,20 +17,20 @@
 const char WIFI_SSID[] = "Pakorn 2.4G";
 const char WIFI_PASSWORD[] = "0819249457";
 const char MQTT_BROKER_ADRRESS[] = "test.mosquitto.org";
-const char MQTT_CLIENT_ID[] = "esp32-radar-360-sys-receiver-001"; 
+const char MQTT_CLIENT_ID[] = "esp32-radar-receiver-270"; 
 const char MQTT_TOPIC[] = "esp32/command";
 
 WiFiClient network;
-MQTTClient mqtt(256);
+MQTTClient mqtt(512); // เพิ่ม Buffer เผื่อ JSON ยาว
 WebServer server(80);
 Servo myServo;
 
 // --- Global Variables ---
-volatile int currentAngle = 90;
+volatile int currentAngle = 135; // เริ่มที่ตรงกลางของ 270 (ประมาณ 135)
 volatile int currentDistance = 0;
 volatile bool isSystemArmed = true; 
 volatile bool isJoyMode = false;
-volatile int joyTargetAngle = 90;
+volatile int joyTargetAngle = 135;
 
 // --- HTML Real-Time Update ---
 const char index_html[] PROGMEM = R"rawliteral(
@@ -45,7 +46,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   </style>
 </head>
 <body>
-  <h1>REAL-TIME RADAR</h1>
+  <h1>REAL-TIME RADAR (270&deg;)</h1>
   <canvas id="radar" width="400" height="400"></canvas>
   <div id="info">Waiting...</div>
 <script>
@@ -55,7 +56,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   var cx = width/2; var cy = height/2; var radius = (width/2)-10;
 
   function drawRadar(angle, dist) {
-    // 1. Fade Effect (ปรับให้เห็นเส้นหางยาวขึ้นเล็กน้อย)
+    // 1. Fade Effect
     ctx.fillStyle = "rgba(0,0,0,0.1)"; 
     ctx.fillRect(0,0,width,height);
 
@@ -65,27 +66,36 @@ const char index_html[] PROGMEM = R"rawliteral(
     ctx.beginPath(); ctx.arc(cx, cy, radius*0.66, 0, 2*Math.PI); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, radius*0.33, 0, 2*Math.PI); ctx.stroke();
     
-    // 3. Draw Line (เข็มเรดาร์)
-    var rad = (angle - 90) * (Math.PI / 180);
-    ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3; // เส้นหนาขึ้น
+    // 3. Draw Line (ปรับการแสดงผลองศาให้สวยงาม)
+    // หมายเหตุ: การแสดงผลขึ้นอยู่กับการติดตั้ง Servo ว่า 0 อยู่ทิศไหน
+    // สูตรนี้: (angle - 90) คือการหมุนแกนวาดรูป
+    var rad = (angle - 135) * (Math.PI / 180); // ปรับ Offset ให้ 135 อยู่ตรงกลางบน (ถ้าต้องการ)
+    // หรือใช้สูตรเดิม: var rad = (angle - 90) * (Math.PI / 180);
+    
+    // ใช้สูตรเดิมตามที่คุณเคยใช้เพื่อให้ทิศไม่เพี้ยนไปจากความเคยชิน
+    var drawRad = (angle * Math.PI / 180) - (Math.PI / 2); // -90 องศาเพื่อให้ 0 เริ่มที่ 12 นาฬิกา หรือปรับตามจริง
+
+    // เอาแบบ Basic สุดที่ตรงกับค่า Angle
+    // var finalRad = (angle - 90) * (Math.PI / 180);
+    var finalRad = (angle - 225) * (Math.PI / 180); // ปรับ Offset ให้ตรงกับการติดตั้งจริง
+    
+    ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(rad) * radius, cy + Math.sin(rad) * radius);
+    ctx.lineTo(cx + Math.cos(finalRad) * radius, cy + Math.sin(finalRad) * radius);
     ctx.stroke();
 
     // 4. Draw Object
     if(dist > 0 && dist < 40) {
       var pixDist = dist * (radius / 40.0);
-      var ox = cx + Math.cos(rad) * pixDist;
-      var oy = cy + Math.sin(rad) * pixDist;
+      var ox = cx + Math.cos(finalRad) * pixDist;
+      var oy = cy + Math.sin(finalRad) * pixDist;
       ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(ox, oy, 8, 0, 2*Math.PI); ctx.fill();
     }
   }
 
-  // --- Real-Time Fetching Loop (แก้ไขตรงนี้) ---
-  // ลดเวลาเหลือ 40ms เพื่อความลื่นไหล (25 FPS)
   setInterval(function() {
     fetch("/data").then(r => r.json()).then(d => {
-      document.getElementById("info").innerHTML = "Mode: " + (d.mode ? "JOY" : "AUTO") + " | Angle: " + d.angle + "°";
+      document.getElementById("info").innerHTML = "Mode: " + (d.mode ? "JOY" : "AUTO") + " | Angle: " + d.angle + "&deg;";
       drawRadar(d.angle, d.dist);
     });
   }, 40); 
@@ -94,7 +104,15 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
-// --- Note Definitions ---
+// --- Note Definitions (สำหรับ Buzzer) ---
+// ต้องมั่นใจว่ามีไฟล์ pitches.h หรือประกาศค่าตรงนี้
+// ถ้าไม่มีไฟล์ pitches.h ให้ Uncomment บรรทัดล่างนี้แทนครับ
+/*
+#define NOTE_C4  262
+#define NOTE_B5  988
+#define NOTE_C6  1047
+#define NOTE_D6  1175
+*/
 int melody[] = { NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C6, NOTE_B5, NOTE_C6, NOTE_D6 };
 int noteDurations[] = { 1, 1, 1, 1, 2, 4, 4, 2 };
 
@@ -103,15 +121,18 @@ long measureDistance() {
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-  long duration = pulseIn(ECHO_PIN, HIGH, 25000); // ลด Timeout ลงเหลือ 25ms เพื่อให้ลูปเร็วขึ้น
+  long duration = pulseIn(ECHO_PIN, HIGH, 25000); 
   long dist = duration * 0.034 / 2;
   if (dist == 0 || dist > 200) dist = 200; 
   return dist;
 }
 
-// --- Task 1: Radar (High Performance Mode) ---
+// --- Task 1: Radar Logic ---
 void radarTask(void *parameter) {
-  myServo.attach(SERVO_PIN);
+  // สำคัญ: กำหนด Pulse Width สำหรับ Servo 270 องศา (ปกติคือ 500-2500)
+  // หากใช้ Servo 180 ทั่วไป ให้ใช้ attach(SERVO_PIN) เฉยๆ ก็ได้
+  myServo.attach(SERVO_PIN, 500, 2500); 
+  
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
@@ -119,23 +140,29 @@ void radarTask(void *parameter) {
 
   while (true) {
     if (isJoyMode) {
-      // --- JOY MODE (Fast Response) ---
-      // อัปเดตองศาทันที ไม่ต้องรอ
+      // --- JOY MODE ---
       myServo.write(joyTargetAngle);
       currentAngle = joyTargetAngle; 
-      
       currentDistance = measureDistance();
-      
-      // *** จุดสำคัญ: ลด Delay เพื่อให้รอบการทำงานเร็วที่สุด ***
-      vTaskDelay(5 / portTICK_PERIOD_MS); 
+      vTaskDelay(10 / portTICK_PERIOD_MS); // ให้เวลา Servo ขยับนิดนึง
     } 
     else {
-      // --- AUTO MODE ---
+      // --- AUTO MODE (0-270) ---
       myServo.write(currentAngle);
       currentDistance = measureDistance();
-      currentAngle += sweepDir;
-      if (currentAngle >= 360) sweepDir = -1; // เดิม 180
-      if (currentAngle <= 0) sweepDir = 1;
+      
+      currentAngle += (sweepDir * 2); 
+      
+      // Limit ที่ 270
+      if (currentAngle >= 270) { 
+          currentAngle = 270; 
+          sweepDir = -1; 
+      } 
+      if (currentAngle <= 0) { 
+          currentAngle = 0; 
+          sweepDir = 1; 
+      }
+      
       vTaskDelay(30 / portTICK_PERIOD_MS);
     }
   }
@@ -148,7 +175,9 @@ void buzzerTask(void *parameter) {
   while (true) {
     if (currentDistance > 0 && currentDistance < 40 && isSystemArmed) {
       for (int i = 0; i < melodySize; i++) {
+        // เช็คเงื่อนไขซ้ำเผื่อระยะเปลี่ยนเร็ว
         if (currentDistance >= 40 || !isSystemArmed) { noTone(BUZZER_PIN); break; }
+        
         int duration = 1000 / noteDurations[i];
         tone(BUZZER_PIN, melody[i], duration);
         vTaskDelay((duration * 1.30) / portTICK_PERIOD_MS);
@@ -162,15 +191,13 @@ void buzzerTask(void *parameter) {
 
 // --- MQTT Callback ---
 void messageReceived(String &topic, String &payload) {
-  // ไม่ต้อง Serial Print เยอะ เพื่อลด Latency
   if (payload.startsWith("J")) {
     isJoyMode = true;
-    String val = payload.substring(1);
-    int angle = val.toInt();
+    int angle = payload.substring(1).toInt();
     
-    // แก้ตรงนี้
+    // Safety Clamp: ล็อคค่าให้ไม่เกิน 270 แน่นอน
     if (angle < 0) angle = 0;
-    if (angle > 360) angle = 360; // ขยายลิมิตเป็น 360
+    if (angle > 270) angle = 270; 
     
     joyTargetAngle = angle;
   }
@@ -191,7 +218,7 @@ void mqttTask(void *parameter) {
   while (true) {
     if (!mqtt.connected()) connectToMQTT();
     mqtt.loop();
-    vTaskDelay(5 / portTICK_PERIOD_MS); // ลด Delay MQTT เพื่อให้รับค่าไวขึ้น
+    vTaskDelay(5 / portTICK_PERIOD_MS);
   }
 }
 
@@ -206,14 +233,12 @@ void serverTask(void *parameter) {
   server.begin();
   while (true) {
     server.handleClient();
-    vTaskDelay(2 / portTICK_PERIOD_MS); // ให้ Priority Web Server สูงหน่อย
+    vTaskDelay(5 / portTICK_PERIOD_MS);
   }
 }
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  
-  // 1. เปิด Serial กลับมา (เปลี่ยนเป็น 115200)
   Serial.begin(115200); 
 
   WiFi.mode(WIFI_STA);
@@ -224,13 +249,10 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-  Serial.println();
-  
-  // 2. ปริ้น IP Address ออกมาให้เห็น
+  Serial.println("\nConnected!");
   Serial.print("Web Server IP: ");
   Serial.println(WiFi.localIP());
 
-  // ... (ส่วน Create Task อื่นๆ เหมือนเดิม) ...
   xTaskCreate(radarTask, "Radar", 2048, NULL, 1, NULL);
   xTaskCreate(buzzerTask, "Buzzer", 2048, NULL, 1, NULL);
   xTaskCreate(mqttTask, "MQTT", 4096, NULL, 1, NULL);

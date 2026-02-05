@@ -5,7 +5,7 @@
 
 // --- Config ---
 #define JOY_X_PIN 34  
-#define JOY_Y_PIN 35  // *** ต้องต่อสายนี้ ค่าถึงจะหมุนรอบ ***
+#define JOY_Y_PIN 35  // *** สายนี้สำคัญสำหรับการหมุน ***
 #define JOY_SW_PIN 23 
 
 const char WIFI_SSID[] = "Pakorn 2.4G";
@@ -22,10 +22,10 @@ struct JoyMessage { char type; int value; };
 bool inAutoMode = false;
 int lastSentAngle = -1;
 
-// ตัวแปรสำหรับทำ Smoothing (กรองค่าให้นิ่ง)
+// ตัวแปรสำหรับทำ Smoothing
 float smoothX = 0;
 float smoothY = 0;
-float alpha = 0.1; // ค่าความหน่วง (0.1 = นุ่มมาก, 0.5 = ไว)
+float alpha = 0.1; 
 
 void connectToMQTT() {
   while (!mqtt.connect(MQTT_CLIENT_ID)) vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -60,8 +60,7 @@ void joystickTask(void *parameter) {
     int rawX = analogRead(JOY_X_PIN);
     int rawY = analogRead(JOY_Y_PIN);
 
-    // --- 1. Smoothing Process (ทำให้ค่านุ่มนวล) ---
-    // สูตร: ค่าใหม่ = (ค่าเก่า * 0.9) + (ค่าปัจจุบัน * 0.1)
+    // --- 1. Smoothing Process ---
     smoothX = (smoothX * (1.0 - alpha)) + (rawX * alpha);
     smoothY = (smoothY * (1.0 - alpha)) + (rawY * alpha);
 
@@ -74,32 +73,33 @@ void joystickTask(void *parameter) {
     }
 
     if (!inAutoMode) {
-      // ใช้ค่า smooth แทนค่า raw
-      int mapX = (int)smoothX - 2048; 
-      int mapY = (int)smoothY - 2048;
+        int mapX = (int)smoothX - 2048; 
+        int mapY = (int)smoothY - 2048;
 
-      // Deadzone: ถ้าอยู่ตรงกลาง (ระยะห่าง < 500) ไม่ต้องส่งค่า
-      if (sqrt((mapX*mapX) + (mapY*mapY)) > 500) {
-        
-        // --- 2. คำนวณองศารอบตัว (360) ---
-        double radian = atan2(mapY, mapX);
-        int angle = radian * (180.0 / PI);
+        // Deadzone: เช็คระยะห่างจากตรงกลาง
+        if (sqrt((mapX*mapX) + (mapY*mapY)) > 500) {
+            
+            double radian = atan2(mapY, mapX); 
+            int angle = (radian * 180.0 / PI) + 180; // แปลงเป็น 0 - 360
 
-        // ปรับทิศทาง (Offset) ให้ตรงกับหน้าจอ
-        // ลองเปลี่ยน +270 เป็นค่าอื่นถ้าทิศไม่ตรง (เช่น +90, +180)
-        angle = (angle + 270) % 360; 
-        if (angle < 0) angle += 360;
+            // --- Logic จำกัดองศาแค่ 270 ---
+            // หากหมุนไปโซน 271-360 ให้ปัดลงเหลือ 270 
+            // (หรือถ้าอยากให้ปัดเป็น 0 เมื่อใกล้ 360 ก็ต้องเขียนเงื่อนไขเพิ่ม แต่แบบนี้ปลอดภัยสุดสำหรับ Servo)
+            if (angle > 270) {
+                angle = 270; 
+            }
 
-        // ส่งค่าเมื่อมีการเปลี่ยนแปลง
-        // ลด threshold เหลือ 2 เพื่อให้ละเอียดขึ้น
-        if (abs(angle - lastSentAngle) > 2) {
-          JoyMessage msg; msg.type = 'J'; msg.value = angle;
-          xQueueSend(mqttQueue, &msg, 0);
-          lastSentAngle = angle;
+            // ส่งค่าเมื่อมีการเปลี่ยนแปลง
+            if (abs(angle - lastSentAngle) > 2) {
+                JoyMessage msg; 
+                msg.type = 'J'; 
+                msg.value = angle;
+                xQueueSend(mqttQueue, &msg, 0);
+                lastSentAngle = angle;
+            }
         }
-      }
     }
-    vTaskDelay(20 / portTICK_PERIOD_MS); // อ่านค่าถี่ขึ้น (20ms)
+    vTaskDelay(20 / portTICK_PERIOD_MS); 
   }
 }
 
