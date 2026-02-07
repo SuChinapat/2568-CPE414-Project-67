@@ -5,13 +5,16 @@
 #include <ESP32Servo.h> 
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
-#include "pitches.h" // อย่าลืมไฟล์นี้นะครับ
+#include "DFRobotDFPlayerMini.h" // ต้องติดตั้ง Library นี้
 
 // --- Pin Config ---
-#define BUZZER_PIN 5
 #define TRIG_PIN 12
 #define ECHO_PIN 14
 #define SERVO_PIN 13
+
+// --- DFPlayer Pin Config (ใช้ Hardware Serial 1 หรือ 2) ---
+#define DFPLAYER_RX_PIN 16 // ต่อกับ TX ของ DFPlayer
+#define DFPLAYER_TX_PIN 17 // ต่อกับ RX ของ DFPlayer
 
 // --- Wi-Fi & MQTT ---
 const char WIFI_SSID[] = "Pakorn 2.4G";
@@ -21,18 +24,25 @@ const char MQTT_CLIENT_ID[] = "esp32-radar-receiver-270";
 const char MQTT_TOPIC[] = "esp32/command";
 
 WiFiClient network;
-MQTTClient mqtt(512); // เพิ่ม Buffer เผื่อ JSON ยาว
+MQTTClient mqtt(512); 
 WebServer server(80);
 Servo myServo;
 
+// --- Audio Objects ---
+HardwareSerial mySerial(1); // ใช้ UART 1
+DFRobotDFPlayerMini myDFPlayer;
+
 // --- Global Variables ---
-volatile int currentAngle = 135; // เริ่มที่ตรงกลางของ 270 (ประมาณ 135)
+volatile int currentAngle = 135; 
 volatile int currentDistance = 0;
 volatile bool isSystemArmed = true; 
 volatile bool isJoyMode = false;
 volatile int joyTargetAngle = 135;
 
-// --- HTML Real-Time Update ---
+// สถานะการเล่นเสียง (เพื่อป้องกันการสั่ง Play ซ้ำๆ จนเสียงกระตุก)
+bool isPlaying = false;
+
+// --- HTML Real-Time Update (คงเดิม) ---
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -56,35 +66,21 @@ const char index_html[] PROGMEM = R"rawliteral(
   var cx = width/2; var cy = height/2; var radius = (width/2)-10;
 
   function drawRadar(angle, dist) {
-    // 1. Fade Effect
     ctx.fillStyle = "rgba(0,0,0,0.1)"; 
     ctx.fillRect(0,0,width,height);
 
-    // 2. Draw Grid
     ctx.strokeStyle = "#004400"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, radius*0.66, 0, 2*Math.PI); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, radius*0.33, 0, 2*Math.PI); ctx.stroke();
     
-    // 3. Draw Line (ปรับการแสดงผลองศาให้สวยงาม)
-    // หมายเหตุ: การแสดงผลขึ้นอยู่กับการติดตั้ง Servo ว่า 0 อยู่ทิศไหน
-    // สูตรนี้: (angle - 90) คือการหมุนแกนวาดรูป
-    var rad = (angle - 135) * (Math.PI / 180); // ปรับ Offset ให้ 135 อยู่ตรงกลางบน (ถ้าต้องการ)
-    // หรือใช้สูตรเดิม: var rad = (angle - 90) * (Math.PI / 180);
-    
-    // ใช้สูตรเดิมตามที่คุณเคยใช้เพื่อให้ทิศไม่เพี้ยนไปจากความเคยชิน
-    var drawRad = (angle * Math.PI / 180) - (Math.PI / 2); // -90 องศาเพื่อให้ 0 เริ่มที่ 12 นาฬิกา หรือปรับตามจริง
-
-    // เอาแบบ Basic สุดที่ตรงกับค่า Angle
-    // var finalRad = (angle - 90) * (Math.PI / 180);
-    var finalRad = (angle - 225) * (Math.PI / 180); // ปรับ Offset ให้ตรงกับการติดตั้งจริง
+    var finalRad = (angle - 225) * (Math.PI / 180); 
     
     ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(cx, cy);
     ctx.lineTo(cx + Math.cos(finalRad) * radius, cy + Math.sin(finalRad) * radius);
     ctx.stroke();
 
-    // 4. Draw Object
     if(dist > 0 && dist < 40) {
       var pixDist = dist * (radius / 40.0);
       var ox = cx + Math.cos(finalRad) * pixDist;
@@ -104,18 +100,6 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
-// --- Note Definitions (สำหรับ Buzzer) ---
-// ต้องมั่นใจว่ามีไฟล์ pitches.h หรือประกาศค่าตรงนี้
-// ถ้าไม่มีไฟล์ pitches.h ให้ Uncomment บรรทัดล่างนี้แทนครับ
-/*
-#define NOTE_C4  262
-#define NOTE_B5  988
-#define NOTE_C6  1047
-#define NOTE_D6  1175
-*/
-int melody[] = { NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C6, NOTE_B5, NOTE_C6, NOTE_D6 };
-int noteDurations[] = { 1, 1, 1, 1, 2, 4, 4, 2 };
-
 // --- Measure Function ---
 long measureDistance() {
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
@@ -129,10 +113,7 @@ long measureDistance() {
 
 // --- Task 1: Radar Logic ---
 void radarTask(void *parameter) {
-  // สำคัญ: กำหนด Pulse Width สำหรับ Servo 270 องศา (ปกติคือ 500-2500)
-  // หากใช้ Servo 180 ทั่วไป ให้ใช้ attach(SERVO_PIN) เฉยๆ ก็ได้
   myServo.attach(SERVO_PIN, 500, 2500); 
-  
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
@@ -140,52 +121,63 @@ void radarTask(void *parameter) {
 
   while (true) {
     if (isJoyMode) {
-      // --- JOY MODE ---
       myServo.write(joyTargetAngle);
       currentAngle = joyTargetAngle; 
       currentDistance = measureDistance();
-      vTaskDelay(10 / portTICK_PERIOD_MS); // ให้เวลา Servo ขยับนิดนึง
+      vTaskDelay(10 / portTICK_PERIOD_MS); 
     } 
     else {
-      // --- AUTO MODE (0-270) ---
       myServo.write(currentAngle);
       currentDistance = measureDistance();
       
       currentAngle += (sweepDir * 2); 
       
-      // Limit ที่ 270
-      if (currentAngle >= 270) { 
-          currentAngle = 270; 
-          sweepDir = -1; 
-      } 
-      if (currentAngle <= 0) { 
-          currentAngle = 0; 
-          sweepDir = 1; 
-      }
+      if (currentAngle >= 270) { currentAngle = 270; sweepDir = -1; } 
+      if (currentAngle <= 0) { currentAngle = 0; sweepDir = 1; }
       
       vTaskDelay(30 / portTICK_PERIOD_MS);
     }
   }
 }
 
-// --- Task 2: Buzzer ---
-void buzzerTask(void *parameter) {
-  pinMode(BUZZER_PIN, OUTPUT);
-  int melodySize = sizeof(melody) / sizeof(int);
+// --- Task 2: DFPlayer Control (Audio) ---
+// เปลี่ยนจาก buzzerTask เป็น audioTask
+void audioTask(void *parameter) {
+  // เริ่มต้น Serial สำหรับ DFPlayer (RX=16, TX=17)
+  mySerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
+  
+  // รอให้ module พร้อม
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  
+  if (!myDFPlayer.begin(mySerial, /*isACK = */true, /*doReset = */true)) {
+    Serial.println(F("Unable to begin DFPlayer: Please check connection!"));
+    // ถ้าต่อไม่ติด อาจจะเลือกที่จะทำงานต่อโดยไม่มีเสียง หรือหยุด loop ก็ได้
+  } else {
+    Serial.println(F("DFPlayer Mini online."));
+    myDFPlayer.volume(20);  // ตั้งความดัง 0-30
+  }
+
   while (true) {
+    // เงื่อนไข: ระยะน้อยกว่า 40 ซม. และระบบ Armed อยู่
     if (currentDistance > 0 && currentDistance < 40 && isSystemArmed) {
-      for (int i = 0; i < melodySize; i++) {
-        // เช็คเงื่อนไขซ้ำเผื่อระยะเปลี่ยนเร็ว
-        if (currentDistance >= 40 || !isSystemArmed) { noTone(BUZZER_PIN); break; }
-        
-        int duration = 1000 / noteDurations[i];
-        tone(BUZZER_PIN, melody[i], duration);
-        vTaskDelay((duration * 1.30) / portTICK_PERIOD_MS);
-        noTone(BUZZER_PIN);
+      if (!isPlaying) {
+        // ถ้ายังไม่ได้เล่นอยู่ ให้สั่งเล่น
+        Serial.println("Object Detected! Playing Sound...");
+        // myDFPlayer.play(1); // เล่นเพลงที่ 1 ครั้งเดียว
+        myDFPlayer.loop(1);    // หรือ เล่นเพลงที่ 1 วนลูปไปเรื่อยๆ จนกว่าจะสั่งหยุด
+        isPlaying = true;
       }
     } else {
-      vTaskDelay(100 / portTICK_PERIOD_MS); 
+      // ถ้าไม่มีวัตถุ หรือระบบ Disarm
+      if (isPlaying) {
+        Serial.println("Clear! Stopping Sound.");
+        myDFPlayer.pause(); // หรือ myDFPlayer.stop();
+        isPlaying = false;
+      }
     }
+    
+    // หน่วงเวลาเล็กน้อยเพื่อไม่ให้ loop เร็วเกินไปจนกินทรัพยากร
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
@@ -194,11 +186,8 @@ void messageReceived(String &topic, String &payload) {
   if (payload.startsWith("J")) {
     isJoyMode = true;
     int angle = payload.substring(1).toInt();
-    
-    // Safety Clamp: ล็อคค่าให้ไม่เกิน 270 แน่นอน
     if (angle < 0) angle = 0;
     if (angle > 270) angle = 270; 
-    
     joyTargetAngle = angle;
   }
   else if (payload == "AUTO") isJoyMode = false;
@@ -253,8 +242,10 @@ void setup() {
   Serial.print("Web Server IP: ");
   Serial.println(WiFi.localIP());
 
+  // สร้าง Tasks
   xTaskCreate(radarTask, "Radar", 2048, NULL, 1, NULL);
-  xTaskCreate(buzzerTask, "Buzzer", 2048, NULL, 1, NULL);
+  // เพิ่ม Stack Size ให้ audioTask หน่อยเพราะ Library นี้ใช้ Serial buffer
+  xTaskCreate(audioTask, "Audio", 4096, NULL, 1, NULL); 
   xTaskCreate(mqttTask, "MQTT", 4096, NULL, 1, NULL);
   xTaskCreate(serverTask, "Web", 4096, NULL, 1, NULL);
 }

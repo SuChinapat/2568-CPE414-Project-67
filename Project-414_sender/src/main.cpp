@@ -5,13 +5,18 @@
 
 // --- Config ---
 #define JOY_X_PIN 34  
-#define JOY_Y_PIN 35  // *** สายนี้สำคัญสำหรับการหมุน ***
+#define JOY_Y_PIN 35  
 #define JOY_SW_PIN 23 
+
+// ปรับความไวในการตรวจจับการขยับเพื่อเข้าโหมด Joy (ค่า 0-2048)
+// ค่า 800 แปลว่าต้องโยกเกือบครึ่งถึงจะตัดเข้า Manual ป้องกันมือไปโดนนิดเดียวแล้วหลุด Auto
+#define WAKE_UP_THRESHOLD 800 
+#define DEADZONE 500
 
 const char WIFI_SSID[] = "Pakorn 2.4G";
 const char WIFI_PASSWORD[] = "0819249457";
 const char MQTT_BROKER_ADRRESS[] = "test.mosquitto.org";
-const char MQTT_CLIENT_ID[] = "esp32-joy-sender-smooth"; 
+const char MQTT_CLIENT_ID[] = "esp32-joy-sender-smart"; 
 const char MQTT_TOPIC[] = "esp32/command";
 
 WiFiClient network;
@@ -19,7 +24,9 @@ MQTTClient mqtt(256);
 QueueHandle_t mqttQueue;
 
 struct JoyMessage { char type; int value; };
-bool inAutoMode = false;
+
+// *** 1. เริ่มต้นให้เป็น AUTO ทันที ***
+bool inAutoMode = true; 
 int lastSentAngle = -1;
 
 // ตัวแปรสำหรับทำ Smoothing
@@ -34,6 +41,10 @@ void connectToMQTT() {
 void mqttTask(void *parameter) {
   mqtt.begin(MQTT_BROKER_ADRRESS, network);
   connectToMQTT();
+  
+  // *** ส่งสถานะ AUTO ครั้งแรกเมื่อเปิดเครื่อง ***
+  mqtt.publish(MQTT_TOPIC, "AUTO");
+
   JoyMessage rcvMsg;
   char payload[10];
   while (true) {
@@ -52,7 +63,6 @@ void mqttTask(void *parameter) {
 void joystickTask(void *parameter) {
   pinMode(JOY_SW_PIN, INPUT_PULLUP);
   
-  // กำหนดค่าเริ่มต้น
   smoothX = analogRead(JOY_X_PIN);
   smoothY = analogRead(JOY_Y_PIN);
 
@@ -60,31 +70,45 @@ void joystickTask(void *parameter) {
     int rawX = analogRead(JOY_X_PIN);
     int rawY = analogRead(JOY_Y_PIN);
 
-    // --- 1. Smoothing Process ---
+    // Smoothing Process
     smoothX = (smoothX * (1.0 - alpha)) + (rawX * alpha);
     smoothY = (smoothY * (1.0 - alpha)) + (rawY * alpha);
 
-    // เช็คปุ่ม AUTO
+    // Map ค่าให้ 0 อยู่ตรงกลาง (-2048 ถึง 2048)
+    int mapX = (int)smoothX - 2048; 
+    int mapY = (int)smoothY - 2048;
+
+    // คำนวณระยะห่างจากจุดศูนย์กลาง (Magnitude)
+    double distance = sqrt((double)(mapX*mapX) + (double)(mapY*mapY));
+
+    // --- 2. เช็คปุ่มกดเพื่อกลับเข้า Auto Mode ---
     if (digitalRead(JOY_SW_PIN) == LOW) {
-      inAutoMode = !inAutoMode;
-      JoyMessage msg; msg.type = 'A';
-      xQueueSend(mqttQueue, &msg, 0);
-      vTaskDelay(500 / portTICK_PERIOD_MS); 
+      if (!inAutoMode) { // ถ้าไม่ได้เป็น Auto อยู่ ให้เปลี่ยนเป็น Auto
+        inAutoMode = true;
+        JoyMessage msg; msg.type = 'A';
+        xQueueSend(mqttQueue, &msg, 0);
+        Serial.println("Button Pressed -> Force AUTO");
+        vTaskDelay(500 / portTICK_PERIOD_MS); // กันเบิ้ล
+      }
     }
 
-    if (!inAutoMode) {
-        int mapX = (int)smoothX - 2048; 
-        int mapY = (int)smoothY - 2048;
+    // --- 3. เช็คการขยับจอยเพื่อปลุกเข้า Joy Mode ---
+    // ถ้าอยู่ใน Auto และมีการโยกจอยแรงกว่า Threshold -> ยกเลิก Auto ทันที
+    if (inAutoMode && distance > WAKE_UP_THRESHOLD) {
+      inAutoMode = false;
+      Serial.println("Movement Detected -> Switch to JOY");
+      // ไม่ต้องส่งอะไรตอนนี้ เดี๋ยว loop ข้างล่างจะส่งค่า J เองทันที
+    }
 
-        // Deadzone: เช็คระยะห่างจากตรงกลาง
-        if (sqrt((mapX*mapX) + (mapY*mapY)) > 500) {
+    // --- 4. การทำงานในโหมด Joystick ---
+    if (!inAutoMode) {
+        // ต้องขยับเกิน Deadzone ถึงจะส่งค่า (ป้องกันจอยหลวมแล้วค่าไหล)
+        if (distance > DEADZONE) {
             
             double radian = atan2(mapY, mapX); 
             int angle = (radian * 180.0 / PI) + 180; // แปลงเป็น 0 - 360
 
-            // --- Logic จำกัดองศาแค่ 270 ---
-            // หากหมุนไปโซน 271-360 ให้ปัดลงเหลือ 270 
-            // (หรือถ้าอยากให้ปัดเป็น 0 เมื่อใกล้ 360 ก็ต้องเขียนเงื่อนไขเพิ่ม แต่แบบนี้ปลอดภัยสุดสำหรับ Servo)
+            // Logic จำกัดองศาแค่ 270
             if (angle > 270) {
                 angle = 270; 
             }
