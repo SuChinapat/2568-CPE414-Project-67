@@ -5,22 +5,20 @@
 #include <ESP32Servo.h> 
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
-#include "DFRobotDFPlayerMini.h" // ต้องติดตั้ง Library นี้
+#include "DFRobotDFPlayerMini.h" 
 
 // --- Pin Config ---
-#define TRIG_PIN 12
+#define TRIG_PIN 27
 #define ECHO_PIN 14
 #define SERVO_PIN 13
-
-// --- DFPlayer Pin Config (ใช้ Hardware Serial 1 หรือ 2) ---
-#define DFPLAYER_RX_PIN 16 // ต่อกับ TX ของ DFPlayer
-#define DFPLAYER_TX_PIN 17 // ต่อกับ RX ของ DFPlayer
+#define DFPLAYER_RX_PIN 16 
+#define DFPLAYER_TX_PIN 17 
 
 // --- Wi-Fi & MQTT ---
 const char WIFI_SSID[] = "Pakorn 2.4G";
 const char WIFI_PASSWORD[] = "0819249457";
 const char MQTT_BROKER_ADRRESS[] = "test.mosquitto.org";
-const char MQTT_CLIENT_ID[] = "esp32-radar-receiver-270"; 
+const char MQTT_CLIENT_ID[] = "esp32-radar-receiver-180"; 
 const char MQTT_TOPIC[] = "esp32/command";
 
 WiFiClient network;
@@ -28,21 +26,18 @@ MQTTClient mqtt(512);
 WebServer server(80);
 Servo myServo;
 
-// --- Audio Objects ---
-HardwareSerial mySerial(1); // ใช้ UART 1
+HardwareSerial mySerial(1); 
 DFRobotDFPlayerMini myDFPlayer;
 
 // --- Global Variables ---
-volatile int currentAngle = 135; 
+volatile int currentAngle = 90; 
 volatile int currentDistance = 0;
 volatile bool isSystemArmed = true; 
 volatile bool isJoyMode = false;
-volatile int joyTargetAngle = 135;
-
-// สถานะการเล่นเสียง (เพื่อป้องกันการสั่ง Play ซ้ำๆ จนเสียงกระตุก)
+volatile int joyTargetAngle = 90;
 bool isPlaying = false;
 
-// --- HTML Real-Time Update (คงเดิม) ---
+// --- HTML (เหมือนเดิม ย่อไว้เพื่อความกระชับ) ---
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -56,35 +51,36 @@ const char index_html[] PROGMEM = R"rawliteral(
   </style>
 </head>
 <body>
-  <h1>REAL-TIME RADAR (270&deg;)</h1>
-  <canvas id="radar" width="400" height="400"></canvas>
+  <h1>REAL-TIME RADAR (180&deg;)</h1>
+  <canvas id="radar" width="400" height="250"></canvas>
   <div id="info">Waiting...</div>
 <script>
   var canvas = document.getElementById("radar");
   var ctx = canvas.getContext("2d");
   var width = canvas.width; var height = canvas.height;
-  var cx = width/2; var cy = height/2; var radius = (width/2)-10;
+  var cx = width/2; var cy = height - 20; 
+  var radius = (width/2)-10;
 
   function drawRadar(angle, dist) {
     ctx.fillStyle = "rgba(0,0,0,0.1)"; 
     ctx.fillRect(0,0,width,height);
 
     ctx.strokeStyle = "#004400"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, radius*0.66, 0, 2*Math.PI); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, radius*0.33, 0, 2*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, radius, Math.PI, 2*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, radius*0.66, Math.PI, 2*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, radius*0.33, Math.PI, 2*Math.PI); ctx.stroke();
     
-    var finalRad = (angle - 225) * (Math.PI / 180); 
-    
+    var rad = Math.PI + (angle * Math.PI / 180);
+
     ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(finalRad) * radius, cy + Math.sin(finalRad) * radius);
+    ctx.lineTo(cx + Math.cos(rad) * radius, cy + Math.sin(rad) * radius);
     ctx.stroke();
 
     if(dist > 0 && dist < 40) {
       var pixDist = dist * (radius / 40.0);
-      var ox = cx + Math.cos(finalRad) * pixDist;
-      var oy = cy + Math.sin(finalRad) * pixDist;
+      var ox = cx + Math.cos(rad) * pixDist;
+      var oy = cy + Math.sin(rad) * pixDist;
       ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(ox, oy, 8, 0, 2*Math.PI); ctx.fill();
     }
   }
@@ -100,7 +96,6 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
-// --- Measure Function ---
 long measureDistance() {
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
@@ -111,9 +106,8 @@ long measureDistance() {
   return dist;
 }
 
-// --- Task 1: Radar Logic ---
 void radarTask(void *parameter) {
-  myServo.attach(SERVO_PIN, 500, 2500); 
+  myServo.attach(SERVO_PIN, 500, 2400); 
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
@@ -124,70 +118,70 @@ void radarTask(void *parameter) {
       myServo.write(joyTargetAngle);
       currentAngle = joyTargetAngle; 
       currentDistance = measureDistance();
-      vTaskDelay(10 / portTICK_PERIOD_MS); 
+      vTaskDelay(15 / portTICK_PERIOD_MS); 
     } 
     else {
       myServo.write(currentAngle);
       currentDistance = measureDistance();
-      
       currentAngle += (sweepDir * 2); 
-      
-      if (currentAngle >= 270) { currentAngle = 270; sweepDir = -1; } 
-      if (currentAngle <= 0) { currentAngle = 0; sweepDir = 1; }
-      
+      if (currentAngle >= 180) { currentAngle = 180; sweepDir = -1; } 
+      if (currentAngle <= 0)   { currentAngle = 0;   sweepDir = 1; }
       vTaskDelay(30 / portTICK_PERIOD_MS);
     }
   }
 }
 
-// --- Task 2: DFPlayer Control (Audio) ---
-// เปลี่ยนจาก buzzerTask เป็น audioTask
 void audioTask(void *parameter) {
-  // เริ่มต้น Serial สำหรับ DFPlayer (RX=16, TX=17)
+  // เริ่มต้น Serial ให้ DFPlayer
   mySerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
-  
-  // รอให้ module พร้อม
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-  
-  if (!myDFPlayer.begin(mySerial, /*isACK = */true, /*doReset = */true)) {
-    Serial.println(F("Unable to begin DFPlayer: Please check connection!"));
-    // ถ้าต่อไม่ติด อาจจะเลือกที่จะทำงานต่อโดยไม่มีเสียง หรือหยุด loop ก็ได้
+  vTaskDelay(2000 / portTICK_PERIOD_MS); // รอให้ DFPlayer ตื่นเต็มที่
+
+  // สั่งเชื่อมต่อ (ปิด ACK เพื่อความลื่นไหล)
+  if (!myDFPlayer.begin(mySerial, /*isACK=*/false, /*doReset=*/true)) {
+    Serial.println(F("DFPlayer Error: Check SD Card / Wiring"));
   } else {
-    Serial.println(F("DFPlayer Mini online."));
-    myDFPlayer.volume(20);  // ตั้งความดัง 0-30
+    Serial.println(F("DFPlayer Online"));
+    myDFPlayer.volume(15); // ตั้งความดัง 0-30
   }
 
+  unsigned long lastTriggerTime = 0;
+  const int keepPlayingDuration = 2000; // ถ้าเจอวัตถุ จะเล่นต่อเนื่องอย่างน้อย 2 วินาที
+
   while (true) {
-    // เงื่อนไข: ระยะน้อยกว่า 40 ซม. และระบบ Armed อยู่
-    if (currentDistance > 0 && currentDistance < 40 && isSystemArmed) {
+    // 1. เช็คว่าเจอวัตถุไหม (ตัดค่า 0 ที่เกิดจาก Error ออก)
+    bool objectDetected = (currentDistance > 1 && currentDistance < 40 && isSystemArmed);
+
+    if (objectDetected) {
+      lastTriggerTime = millis(); // จำเวลาล่าสุดที่เจอ
+      
       if (!isPlaying) {
-        // ถ้ายังไม่ได้เล่นอยู่ ให้สั่งเล่น
-        Serial.println("Object Detected! Playing Sound...");
-        // myDFPlayer.play(1); // เล่นเพลงที่ 1 ครั้งเดียว
-        myDFPlayer.loop(1);    // หรือ เล่นเพลงที่ 1 วนลูปไปเรื่อยๆ จนกว่าจะสั่งหยุด
+        // ถ้ายังไม่เล่น ให้เริ่มเล่น
+        myDFPlayer.loop(1); // เล่นไฟล์ 0001.mp3 วนไป
         isPlaying = true;
+        Serial.println(">>> START PLAYING");
       }
-    } else {
-      // ถ้าไม่มีวัตถุ หรือระบบ Disarm
-      if (isPlaying) {
-        Serial.println("Clear! Stopping Sound.");
-        myDFPlayer.pause(); // หรือ myDFPlayer.stop();
+    } 
+    else {
+      // 2. ถ้าไม่เจอวัตถุ... ให้รอดูเวลาก่อน อย่าเพิ่งรีบปิด
+      // ถ้าเวลาผ่านไปเกิน 2 วินาทีแล้ว ค่อยสั่งหยุด
+      if (isPlaying && (millis() - lastTriggerTime > keepPlayingDuration)) {
+        myDFPlayer.pause();
         isPlaying = false;
+        Serial.println("||| STOP PLAYING (Timeout)");
       }
     }
-    
-    // หน่วงเวลาเล็กน้อยเพื่อไม่ให้ loop เร็วเกินไปจนกินทรัพยากร
+
+    // หน่วงเวลา Loop ไม่ให้ทำงานถี่เกินไป (ลดภาระ CPU)
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
-// --- MQTT Callback ---
 void messageReceived(String &topic, String &payload) {
   if (payload.startsWith("J")) {
     isJoyMode = true;
     int angle = payload.substring(1).toInt();
     if (angle < 0) angle = 0;
-    if (angle > 270) angle = 270; 
+    if (angle > 180) angle = 180; 
     joyTargetAngle = angle;
   }
   else if (payload == "AUTO") isJoyMode = false;
@@ -207,7 +201,7 @@ void mqttTask(void *parameter) {
   while (true) {
     if (!mqtt.connected()) connectToMQTT();
     mqtt.loop();
-    vTaskDelay(5 / portTICK_PERIOD_MS);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
@@ -232,19 +226,13 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nConnected!");
-  Serial.print("Web Server IP: ");
+  while (WiFi.status() != WL_CONNECTED) delay(500);
+
   Serial.println(WiFi.localIP());
 
-  // สร้าง Tasks
+  // Task Creation
   xTaskCreate(radarTask, "Radar", 2048, NULL, 1, NULL);
-  // เพิ่ม Stack Size ให้ audioTask หน่อยเพราะ Library นี้ใช้ Serial buffer
+  // เพิ่ม Stack Size เผื่อไว้หน่อย
   xTaskCreate(audioTask, "Audio", 4096, NULL, 1, NULL); 
   xTaskCreate(mqttTask, "MQTT", 4096, NULL, 1, NULL);
   xTaskCreate(serverTask, "Web", 4096, NULL, 1, NULL);
