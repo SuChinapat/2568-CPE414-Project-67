@@ -37,7 +37,6 @@ volatile bool isJoyMode = false;
 volatile int joyTargetAngle = 90;
 bool isPlaying = false;
 
-// --- HTML (เหมือนเดิม ย่อไว้เพื่อความกระชับ) ---
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -45,31 +44,98 @@ const char index_html[] PROGMEM = R"rawliteral(
   <title>ESP32 Radar Monitor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { background-color: #000; color: #0f0; font-family: courier; text-align: center; margin: 0; }
-    canvas { background-color: #111; border-radius: 50%; box-shadow: 0 0 20px #0f0; margin-top: 20px;}
-    #info { font-size: 20px; margin-top: 10px; font-weight: bold;}
+    body { 
+      background-color: #000; 
+      color: #0f0; 
+      font-family: 'Courier New', Courier, monospace; 
+      text-align: center; 
+      margin: 0; 
+      padding: 10px; /* เพิ่มขอบไม่ให้ชิดจอเกินไป */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    
+    h1 {
+      font-size: clamp(1.5rem, 5vw, 2rem); /* ตัวหนังสือปรับขนาดตามจอ */
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px #0f0;
+    }
+
+    /* กล่องครอบ Canvas เพื่อจัดระเบียบ */
+    .radar-container {
+      position: relative;
+      width: 100%;
+      max-width: 400px; /* กว้างสุดไม่เกิน 400px (ในคอม) */
+      display: flex;
+      justify-content: center;
+    }
+
+    canvas { 
+      background-color: #111; 
+      
+      /* --- หัวใจสำคัญของความ Responsive --- */
+      width: 100%;        /* ให้กว้างเต็มพื้นที่ของ container */
+      height: auto;       /* ให้สูงตามสัดส่วนเดิม ไม่เบี้ยว */
+      /* ----------------------------------- */
+      
+      border-radius: 10px; /* ลบมุมนิดหน่อยให้สวยงาม */
+      box-shadow: 0 0 20px #0f0; 
+      border: 1px solid #333;
+    }
+
+    #info { 
+      font-size: 1.2rem; 
+      margin-top: 20px; 
+      font-weight: bold;
+      padding: 10px;
+      border: 1px solid #0f0;
+      border-radius: 5px;
+      width: 100%;
+      max-width: 380px;
+      box-sizing: border-box;
+      background: rgba(0, 50, 0, 0.3);
+    }
   </style>
 </head>
 <body>
-  <h1>REAL-TIME RADAR (180&deg;)</h1>
-  <canvas id="radar" width="400" height="250"></canvas>
+  <h1>RADAR MONITOR (180&deg;)</h1>
+  
+  <div class="radar-container">
+    <canvas id="radar" width="400" height="250"></canvas>
+  </div>
+  
   <div id="info">Waiting...</div>
+
 <script>
   var canvas = document.getElementById("radar");
   var ctx = canvas.getContext("2d");
-  var width = canvas.width; var height = canvas.height;
-  var cx = width/2; var cy = height - 20; 
+  
+  // ใช้ขนาดภายใน (Internal Resolution) ในการวาด
+  var width = canvas.width; 
+  var height = canvas.height;
+  
+  var cx = width/2; 
+  var cy = height - 20; 
   var radius = (width/2)-10;
 
   function drawRadar(angle, dist) {
+    // 1. Fade Effect
     ctx.fillStyle = "rgba(0,0,0,0.1)"; 
     ctx.fillRect(0,0,width,height);
 
-    ctx.strokeStyle = "#004400"; ctx.lineWidth = 1;
+    // 2. Draw Grid (ครึ่งวงกลม)
+    ctx.strokeStyle = "#004400"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(cx, cy, radius, Math.PI, 2*Math.PI); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, radius*0.66, Math.PI, 2*Math.PI); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, radius*0.33, Math.PI, 2*Math.PI); ctx.stroke();
     
+    // เส้นฐานแนวนอน
+    ctx.beginPath(); ctx.moveTo(10, cy); ctx.lineTo(width-10, cy); ctx.stroke();
+    
+    // 3. Draw Scanner Line
+    // แปลง 0-180 องศา เป็น Radian (PI ถึง 2PI)
     var rad = Math.PI + (angle * Math.PI / 180);
 
     ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
@@ -77,17 +143,25 @@ const char index_html[] PROGMEM = R"rawliteral(
     ctx.lineTo(cx + Math.cos(rad) * radius, cy + Math.sin(rad) * radius);
     ctx.stroke();
 
+    // 4. Draw Object
     if(dist > 0 && dist < 40) {
       var pixDist = dist * (radius / 40.0);
       var ox = cx + Math.cos(rad) * pixDist;
       var oy = cy + Math.sin(rad) * pixDist;
-      ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(ox, oy, 8, 0, 2*Math.PI); ctx.fill();
+      
+      // วาดจุดแดงให้เรืองแสงนิดหน่อย
+      ctx.shadowBlur = 10; ctx.shadowColor = "red";
+      ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(ox, oy, 10, 0, 2*Math.PI); ctx.fill();
+      ctx.shadowBlur = 0; // Reset shadow
     }
   }
 
   setInterval(function() {
     fetch("/data").then(r => r.json()).then(d => {
-      document.getElementById("info").innerHTML = "Mode: " + (d.mode ? "JOY" : "AUTO") + " | Angle: " + d.angle + "&deg;";
+      // ตกแต่งข้อความให้ดูง่ายขึ้น
+      var modeText = d.mode ? "<span style='color:yellow'>JOYSTICK</span>" : "<span style='color:cyan'>AUTO</span>";
+      document.getElementById("info").innerHTML = "MODE: " + modeText + "<br>ANGLE: " + d.angle + "&deg; | DIST: " + d.dist + "cm";
+      
       drawRadar(d.angle, d.dist);
     });
   }, 40); 
