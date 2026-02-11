@@ -206,47 +206,50 @@ void radarTask(void *parameter) {
 }
 
 void audioTask(void *parameter) {
-  // เริ่มต้น Serial ให้ DFPlayer
+  // เริ่มต้น Serial (16=RX, 17=TX)
   mySerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
-  vTaskDelay(2000 / portTICK_PERIOD_MS); // รอให้ DFPlayer ตื่นเต็มที่
 
-  // สั่งเชื่อมต่อ (ปิด ACK เพื่อความลื่นไหล)
-  if (!myDFPlayer.begin(mySerial, /*isACK=*/false, /*doReset=*/true)) {
-    Serial.println(F("DFPlayer Error: Check SD Card / Wiring"));
-  } else {
-    Serial.println(F("DFPlayer Online"));
-    myDFPlayer.volume(15); // ตั้งความดัง 0-30
+  Serial.println(F("Initializing DFPlayer ..."));
+
+  if (!myDFPlayer.begin(mySerial, /*isACK=*/true, /*doReset=*/true)) {
+    Serial.println(F("Unable to begin:"));
+    Serial.println(F("1.Please recheck the connection!"));
+    Serial.println(F("2.Please insert the SD card!"));
+    while(true){
+      delay(0); 
+    }
   }
-
-  unsigned long lastTriggerTime = 0;
-  const int keepPlayingDuration = 2000; // ถ้าเจอวัตถุ จะเล่นต่อเนื่องอย่างน้อย 2 วินาที
-
+  Serial.println(F("DFPlayer Mini online."));
+  bool isBusy = false; // ตัวแปรเช็คว่ากำลังเล่นอยู่ไหม
+  myDFPlayer.volume(10);  // ตั้งความดัง (0-30)
   while (true) {
-    // 1. เช็คว่าเจอวัตถุไหม (ตัดค่า 0 ที่เกิดจาก Error ออก)
+    // 1. เช็คว่าเจอวัตถุไหม
     bool objectDetected = (currentDistance > 1 && currentDistance < 40 && isSystemArmed);
 
-    if (objectDetected) {
-      lastTriggerTime = millis(); // จำเวลาล่าสุดที่เจอ
-      
-      if (!isPlaying) {
-        // ถ้ายังไม่เล่น ให้เริ่มเล่น
-        myDFPlayer.loop(1); // เล่นไฟล์ 0001.mp3 วนไป
-        isPlaying = true;
-        Serial.println(">>> START PLAYING");
-      }
-    } 
-    else {
-      // 2. ถ้าไม่เจอวัตถุ... ให้รอดูเวลาก่อน อย่าเพิ่งรีบปิด
-      // ถ้าเวลาผ่านไปเกิน 2 วินาทีแล้ว ค่อยสั่งหยุด
-      if (isPlaying && (millis() - lastTriggerTime > keepPlayingDuration)) {
-        myDFPlayer.pause();
-        isPlaying = false;
-        Serial.println("||| STOP PLAYING (Timeout)");
-      }
+    // 2. อ่านสถานะจาก DFPlayer (สำคัญ!)
+    // เราจะเช็คว่า state เป็น 512 (Busy/Playing) หรือไม่
+    // แต่เพื่อความชัวร์ เราจะใช้ Logic แบบจำสถานะเอาเองก่อน
+    
+   if (objectDetected && !isPlaying) {
+    myDFPlayer.play(1);
+    isPlaying = true;
+    vTaskDelay(2000  / portTICK_PERIOD_MS); // ความยาวไฟล์
+    isPlaying = false;
     }
 
-    // หน่วงเวลา Loop ไม่ให้ทำงานถี่เกินไป (ลดภาระ CPU)
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    // Serial.print(myDFPlayer.available());
+    // if (myDFPlayer.available()) {
+    //   uint8_t type = myDFPlayer.readType();
+    //   int value = myDFPlayer.read();
+      
+    //   // ถ้าได้รับข้อความว่า "เล่นจบแล้ว" (DFPlayerPlayFinished = 71)
+    //   if (type == DFPlayerPlayFinished) {
+    //     Serial.println("<<< SONG FINISHED");
+    //     isBusy = false; // ปลดล็อค ให้เล่นใหม่ได้ถ้ายังเจอวัตถุ
+    //   }
+    // }
+    vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
 
