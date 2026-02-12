@@ -13,13 +13,14 @@
 #define JOY_SW_PIN 23 
 
 #define WAKE_UP_THRESHOLD 800 
-#define DEADZONE 500
+#define DEADZONE 250
 
 const char WIFI_SSID[] = "Pakorn 2.4G";
 const char WIFI_PASSWORD[] = "0819249457";
-const char MQTT_BROKER_ADRRESS[] = "test.mosquitto.org";
-const char MQTT_CLIENT_ID[] = "esp32-joy-sender-180"; 
-const char MQTT_TOPIC[] = "esp32/command";
+const char MQTT_BROKER_ADRRESS[] = "broker.hivemq.com";
+const char MQTT_CLIENT_ID[] = "esp32-radar-180-fast-87342";
+const char MQTT_TOPIC[] = "esp32/radar_87342/control";
+
 
 WiFiClient network;
 MQTTClient mqtt(256);
@@ -35,23 +36,27 @@ float smoothY = 0;
 float alpha = 0.1; 
 
 void connectToMQTT() {
-  Serial.print("Checking WiFi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-  Serial.println("\nWiFi Connected!");
 
-  Serial.print("Connecting MQTT...");
-  while (!mqtt.connect(MQTT_CLIENT_ID)) {
-    Serial.print(".");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Waiting WiFi...");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
-  Serial.println("\nMQTT Connected!");
+
+  mqtt.begin(MQTT_BROKER_ADRRESS, 1883, network);
+
+
+  while (!mqtt.connect(MQTT_CLIENT_ID)) {
+    Serial.println("MQTT connect failed, retrying...");
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+  }
+
+  Serial.println("MQTT Connected!");
 }
 
+
 void mqttTask(void *parameter) {
-  mqtt.begin(MQTT_BROKER_ADRRESS, network);
+  mqtt.begin(MQTT_BROKER_ADRRESS, 1883, network);
+
   connectToMQTT();
   
   // ส่งค่าเริ่มต้น
@@ -108,17 +113,22 @@ void joystickTask(void *parameter) {
     // ขยับจอยแรงๆ เพื่อเข้าโหมด Joy
     if (inAutoMode && distance > WAKE_UP_THRESHOLD) {
       inAutoMode = false;
+      Serial.println(distance);
       Serial.println("Joy Moved -> Manual Mode");
     }
 
     if (!inAutoMode) {
         if (distance > DEADZONE) {
             
-            double radian = atan2(mapY, mapX); 
-            int angle = (radian * 180.0 / PI) + 180; 
+            double radian = atan2(mapY, mapX);
+            int angle = (radian * 180.0 / PI);
 
+            // ทำให้เป็น 0-360
+            if (angle < 0) angle += 360;
+
+            // บีบเหลือ 0-180 แบบ mirror
             if (angle > 180) {
-                angle = 180; 
+                angle = 360 - angle;
             }
 
             if (abs(angle - lastSentAngle) > 2) {
