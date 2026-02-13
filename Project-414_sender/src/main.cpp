@@ -15,8 +15,8 @@
 #define WAKE_UP_THRESHOLD 800 
 #define DEADZONE 250
 
-const char WIFI_SSID[] = "Pakorn 2.4G";
-const char WIFI_PASSWORD[] = "0819249457";
+const char WIFI_SSID[] = "Mi 10T";
+const char WIFI_PASSWORD[] = "0123456789";
 const char MQTT_BROKER_ADRRESS[] = "broker.hivemq.com";
 const char MQTT_CLIENT_ID[] = "esp32-radar-180-fast-87342";
 const char MQTT_TOPIC[] = "esp32/radar_87342/control";
@@ -31,9 +31,8 @@ struct JoyMessage { char type; int value; };
 bool inAutoMode = true; 
 int lastSentAngle = -1;
 
-float smoothX = 0;
-float smoothY = 0;
-float alpha = 0.1; 
+int centerX;
+int centerY;
 
 void connectToMQTT() {
 
@@ -85,18 +84,18 @@ void mqttTask(void *parameter) {
 void joystickTask(void *parameter) {
   pinMode(JOY_SW_PIN, INPUT_PULLUP);
   
-  smoothX = analogRead(JOY_X_PIN);
-  smoothY = analogRead(JOY_Y_PIN);
+  int rawX = analogRead(JOY_X_PIN);
+  int rawY = analogRead(JOY_Y_PIN);
 
   while (true) {
     int rawX = analogRead(JOY_X_PIN);
     int rawY = analogRead(JOY_Y_PIN);
+    Serial.print("rawX: "); Serial.print(rawX);
+    Serial.print(" rawY: "); Serial.println(rawY);
 
-    smoothX = (smoothX * (1.0 - alpha)) + (rawX * alpha);
-    smoothY = (smoothY * (1.0 - alpha)) + (rawY * alpha);
 
-    int mapX = (int)smoothX - 2048; 
-    int mapY = (int)smoothY - 2048;
+    int mapX = rawX - centerX;
+    int mapY = rawY - centerY;
 
     double distance = sqrt((double)(mapX*mapX) + (double)(mapY*mapY));
 
@@ -110,7 +109,6 @@ void joystickTask(void *parameter) {
       }
     }
 
-    // ขยับจอยแรงๆ เพื่อเข้าโหมด Joy
     if (inAutoMode && distance > WAKE_UP_THRESHOLD) {
       inAutoMode = false;
       Serial.println(distance);
@@ -121,7 +119,8 @@ void joystickTask(void *parameter) {
         if (distance > DEADZONE) {
             
             double radian = atan2(mapY, mapX);
-            int angle = (radian * 180.0 / PI);
+            int angle = radian * (180.0 / PI);
+            // Serial.println(angle);
 
             // ทำให้เป็น 0-360
             if (angle < 0) angle += 360;
@@ -145,13 +144,20 @@ void joystickTask(void *parameter) {
 }
 
 void setup() {
+  analogSetAttenuation(ADC_11db);
+
   // 1. ปิด Brownout Detector ทันทีที่เริ่ม
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   
-  Serial.begin(115200);
+  Serial.begin(921600);
   
   // 2. รอ 1 วินาที เพื่อให้ Serial Monitor พร้อม และไฟนิ่ง
   delay(1000); 
+  centerX = analogRead(JOY_X_PIN);
+  centerY = analogRead(JOY_Y_PIN);
+
+  Serial.print("CenterX: "); Serial.println(centerX);
+  Serial.print("CenterY: "); Serial.println(centerY);
   Serial.println("\n--- Sender Starting ---");
 
   WiFi.mode(WIFI_STA);
