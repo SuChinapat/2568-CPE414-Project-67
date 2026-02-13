@@ -15,8 +15,9 @@
 #define DFPLAYER_TX_PIN 17
 
 // ---------------- WIFI ----------------
-const char WIFI_SSID[] = "Pakorn 2.4G";
-const char WIFI_PASSWORD[] = "0819249457";
+
+const char WIFI_SSID[] = "Mi 10T";
+const char WIFI_PASSWORD[] = "0123456789";
 
 // ---------------- MQTT ----------------
 const char MQTT_BROKER_ADRRESS[] = "broker.hivemq.com";
@@ -47,7 +48,7 @@ long measureDistanceFast() {
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  long duration = pulseIn(ECHO_PIN, HIGH, 10000);
+  long duration = pulseIn(ECHO_PIN, HIGH, 1000);
   long dist = duration * 0.034 / 2;
 
   if (dist > 1 && dist < 200) return dist;
@@ -114,7 +115,7 @@ void messageReceived(String &topic, String &payload) {
     isJoyMode = true;
     int raw = payload.substring(1).toInt();
     raw = constrain(raw, 0, 180);
-    joyTargetAngle = 180 - raw;
+    joyTargetAngle = raw;
   }
   else if (payload == "AUTO") isJoyMode = false;
   else if (payload == "1") isSystemArmed = true;
@@ -258,7 +259,7 @@ void serverTask(void *parameter) {
 void setup() {
 
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  Serial.begin(115200);
+  Serial.begin(921600);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
