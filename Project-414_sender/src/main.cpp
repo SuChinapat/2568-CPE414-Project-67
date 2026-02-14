@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <MQTTClient.h>
+#include <esp_now.h>
 #include <math.h>
 
 // *** เพิ่ม Library ป้องกันไฟตก ***
@@ -8,170 +8,165 @@
 #include "soc/rtc_cntl_reg.h"
 
 // --- Config ---
-#define JOY_X_PIN 34  
-#define JOY_Y_PIN 35  
-#define JOY_SW_PIN 23 
+// *** 🔴 ใส่ MAC Address ของตัวรับ (Receiver) ที่นี่ 🔴 ***
+uint8_t broadcastAddress[] = {0x30, 0xC9, 0x22, 0x33, 0x19, 0x20}; 
 
-#define WAKE_UP_THRESHOLD 800 
-#define DEADZONE 250
-
+// WiFi ชื่อเดียวกับตัวรับ
 const char WIFI_SSID[] = "Mi 10T";
 const char WIFI_PASSWORD[] = "0123456789";
-const char MQTT_BROKER_ADRRESS[] = "broker.hivemq.com";
-const char MQTT_CLIENT_ID[] = "esp32-radar-180-fast-87342";
-const char MQTT_TOPIC[] = "esp32/radar_87342/control";
 
+#define JOY_X_PIN 34
+#define JOY_Y_PIN 35
+#define JOY_SW_PIN 23
 
-WiFiClient network;
-MQTTClient mqtt(256);
-QueueHandle_t mqttQueue;
+#define WAKE_UP_THRESHOLD 800
+#define DEADZONE 250
 
-struct JoyMessage { char type; int value; };
+// โครงสร้างข้อมูล
+typedef struct struct_message {
+  char type;
+  int value;
+} struct_message;
 
-bool inAutoMode = true; 
+struct_message myData;
+esp_now_peer_info_t peerInfo;
+QueueHandle_t sendQueue;
+
+bool inAutoMode = true;
 int lastSentAngle = -1;
+int centerX, centerY;
 
-int centerX;
-int centerY;
+// *** เพิ่มตัวแปรสำหรับ Filter ***
+#define FILTER_SIZE 10 // อ่าน 10 ครั้งแล้วหาค่าเฉลี่ย
+int readingsX[FILTER_SIZE];
+int readingsY[FILTER_SIZE];
+int readIndex = 0;
+long totalX = 0;
+long totalY = 0;
 
-void connectToMQTT() {
+// --- Task 1: ส่งข้อมูล ESP-NOW ---
+void espNowTask(void *parameter) {
+  if (esp_now_init() != ESP_OK) vTaskDelete(NULL);
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) vTaskDelete(NULL);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Waiting WiFi...");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
+  myData.type = 'A';
+  myData.value = 0;
+  esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
 
-  mqtt.begin(MQTT_BROKER_ADRRESS, 1883, network);
-
-
-  while (!mqtt.connect(MQTT_CLIENT_ID)) {
-    Serial.println("MQTT connect failed, retrying...");
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-  }
-
-  Serial.println("MQTT Connected!");
-}
-
-
-void mqttTask(void *parameter) {
-  mqtt.begin(MQTT_BROKER_ADRRESS, 1883, network);
-
-  connectToMQTT();
-  
-  // ส่งค่าเริ่มต้น
-  mqtt.publish(MQTT_TOPIC, "AUTO");
-  Serial.println("Initial AUTO mode sent.");
-
-  JoyMessage rcvMsg;
-  char payload[10];
+  struct_message msgToSend;
   while (true) {
-    if (!mqtt.connected()) connectToMQTT();
-    mqtt.loop();
-    if (xQueueReceive(mqttQueue, &rcvMsg, 0) == pdTRUE) {
-      if (rcvMsg.type == 'J') {
-        sprintf(payload, "J%d", rcvMsg.value); 
-        mqtt.publish(MQTT_TOPIC, payload);
-        Serial.printf("Sent: %s\n", payload); // Debug print
-      } else if (rcvMsg.type == 'A') {
-        mqtt.publish(MQTT_TOPIC, "AUTO");
-        Serial.println("Sent: AUTO"); // Debug print
-      }
+    if (xQueueReceive(sendQueue, &msgToSend, portMAX_DELAY) == pdTRUE) {
+        esp_now_send(broadcastAddress, (uint8_t *) &msgToSend, sizeof(msgToSend));
     }
-    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
+// --- ฟังก์ชันอ่านจอยแบบนิ่งๆ (Smooth Read) ---
+void readJoystickSmooth(int *outX, int *outY) {
+  // ลบค่าเก่าออก
+  totalX = totalX - readingsX[readIndex];
+  totalY = totalY - readingsY[readIndex];
+  
+  // อ่านค่าใหม่
+  readingsX[readIndex] = analogRead(JOY_X_PIN);
+  readingsY[readIndex] = analogRead(JOY_Y_PIN);
+  
+  // รวมค่าใหม่
+  totalX = totalX + readingsX[readIndex];
+  totalY = totalY + readingsY[readIndex];
+  
+  // เลื่อน Index
+  readIndex = (readIndex + 1);
+  if (readIndex >= FILTER_SIZE) readIndex = 0;
+
+  // คืนค่าเฉลี่ย
+  *outX = totalX / FILTER_SIZE;
+  *outY = totalY / FILTER_SIZE;
+}
+
+// --- Task 2: อ่าน Joystick (Uncomment และเพิ่ม Filter) ---
 void joystickTask(void *parameter) {
   pinMode(JOY_SW_PIN, INPUT_PULLUP);
   
-  int rawX = analogRead(JOY_X_PIN);
-  int rawY = analogRead(JOY_Y_PIN);
+  // Init Filter Array
+  for (int i = 0; i < FILTER_SIZE; i++) {
+    readingsX[i] = centerX;
+    readingsY[i] = centerY;
+    totalX += centerX;
+    totalY += centerY;
+  }
 
   while (true) {
-    int rawX = analogRead(JOY_X_PIN);
-    int rawY = analogRead(JOY_Y_PIN);
-    Serial.print("rawX: "); Serial.print(rawX);
-    Serial.print(" rawY: "); Serial.println(rawY);
+    int smoothX, smoothY;
+    readJoystickSmooth(&smoothX, &smoothY); // อ่านแบบนิ่งๆ
 
-
-    int mapX = rawX - centerX;
-    int mapY = rawY - centerY;
+    int mapX = smoothX - centerX;
+    int mapY = smoothY - centerY;
 
     double distance = sqrt((double)(mapX*mapX) + (double)(mapY*mapY));
 
-    // ปุ่มกดเพื่อกลับเข้า Auto
+    // 1. ปุ่มกด -> กลับ Auto
     if (digitalRead(JOY_SW_PIN) == LOW) {
-      if (!inAutoMode) { 
+      if (!inAutoMode) {
         inAutoMode = true;
-        JoyMessage msg; msg.type = 'A';
-        xQueueSend(mqttQueue, &msg, 0);
-        vTaskDelay(500 / portTICK_PERIOD_MS); 
+        struct_message msg; msg.type = 'A'; msg.value = 0;
+        xQueueSend(sendQueue, &msg, 0);
+        Serial.println("Sent: AUTO");
+        vTaskDelay(500 / portTICK_PERIOD_MS);
       }
     }
 
+    // 2. ขยับจอย -> Manual (Uncommented)
     if (inAutoMode && distance > WAKE_UP_THRESHOLD) {
       inAutoMode = false;
-      Serial.println(distance);
-      Serial.println("Joy Moved -> Manual Mode");
+      Serial.println("Manual Mode Activated!");
     }
 
+    // 3. ส่งค่า (Manual Mode) (Uncommented)
     if (!inAutoMode) {
         if (distance > DEADZONE) {
-            
             double radian = atan2(mapY, mapX);
             int angle = radian * (180.0 / PI);
-            // Serial.println(angle);
-
-            // ทำให้เป็น 0-360
             if (angle < 0) angle += 360;
+            if (angle > 180) angle = 360 - angle;
 
-            // บีบเหลือ 0-180 แบบ mirror
-            if (angle > 180) {
-                angle = 360 - angle;
-            }
-
-            if (abs(angle - lastSentAngle) > 2) {
-                JoyMessage msg; 
-                msg.type = 'J'; 
+            // *** เพิ่ม Hysteresis: ต้องเปลี่ยนเกิน 2 องศาค่อยส่ง ***
+            if (abs(angle - lastSentAngle) > 2) { 
+                struct_message msg;
+                msg.type = 'J';
                 msg.value = angle;
-                xQueueSend(mqttQueue, &msg, 0);
+                xQueueSend(sendQueue, &msg, 0);
                 lastSentAngle = angle;
             }
         }
     }
-    vTaskDelay(20 / portTICK_PERIOD_MS); 
+    
+    // อ่านถี่ๆ เพื่อให้ค่าเฉลี่ยแม่นยำ (5ms)
+    vTaskDelay(5 / portTICK_PERIOD_MS);
   }
 }
 
 void setup() {
-  analogSetAttenuation(ADC_11db);
-
-  // 1. ปิด Brownout Detector ทันทีที่เริ่ม
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  
   Serial.begin(921600);
   
-  // 2. รอ 1 วินาที เพื่อให้ Serial Monitor พร้อม และไฟนิ่ง
-  delay(1000); 
+  delay(1000);
   centerX = analogRead(JOY_X_PIN);
   centerY = analogRead(JOY_Y_PIN);
 
-  Serial.print("CenterX: "); Serial.println(centerX);
-  Serial.print("CenterY: "); Serial.println(centerY);
-  Serial.println("\n--- Sender Starting ---");
+  // เช็คสายขาด
+  if(centerY < 100) Serial.println("WARNING: JOYSTICK DISCONNECTED!");
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi Connected (Setup Phase)");
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\nReady!");
 
-  mqttQueue = xQueueCreate(10, sizeof(JoyMessage));
-  xTaskCreate(mqttTask, "MQTT", 4096, NULL, 1, NULL);
+  sendQueue = xQueueCreate(20, sizeof(struct_message));
+  xTaskCreate(espNowTask, "ESP-NOW", 4096, NULL, 1, NULL);
   xTaskCreate(joystickTask, "Joy", 4096, NULL, 1, NULL);
 }
 
