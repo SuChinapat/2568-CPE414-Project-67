@@ -217,6 +217,7 @@ void setup() {
   // Hybrid Mode: AP+STA
   WiFi.mode(WIFI_AP_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.println("MAC Address: " + WiFi.macAddress());
 
   Serial.print("Connecting WiFi");
   while (WiFi.status() != WL_CONNECTED) {
