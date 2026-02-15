@@ -20,7 +20,7 @@ const char WIFI_PASSWORD[] = "0123456789";
 
 // ---------------- JOY CONFIG ----------------
 #define DEADZONE 2
-#define JOY_TIMEOUT 800 // เวลา Timeout ถ้าไม่ขยับจอยจะกลับ Auto
+#define JOY_TIMEOUT 5000 // เวลา Timeout ถ้าไม่ขยับจอยจะกลับ Auto
 
 // ---------------- STRUCT ----------------
 typedef struct struct_message {
