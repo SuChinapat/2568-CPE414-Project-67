@@ -9,7 +9,10 @@
 
 // --- Config ---
 // *** 🔴 ใส่ MAC Address ของตัวรับ (Receiver) ที่นี่ 🔴 ***
-uint8_t broadcastAddress[] = {0x30, 0xC9, 0x22, 0x33, 0x19, 0x20}; 
+//pooh
+//uint8_t broadcastAddress[] = {0x30, 0xC9, 0x22, 0x33, 0x19, 0x20}; 
+//dan
+uint8_t broadcastAddress[] = {0xD8, 0x13, 0x2A, 0x7F, 0x92, 0x5C};
 
 // WiFi ชื่อเดียวกับตัวรับ
 const char WIFI_SSID[] = "Mi 10T";
