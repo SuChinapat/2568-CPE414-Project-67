@@ -1,176 +1,307 @@
 #include <Arduino.h>
+
 #include <WiFi.h>
+
 #include <esp_now.h>
+
 #include <math.h>
 
-// *** เพิ่ม Library ป้องกันไฟตก ***
+// Brownout protection
+
 #include "soc/soc.h"
+
 #include "soc/rtc_cntl_reg.h"
 
 // --- Config ---
-// *** 🔴 ใส่ MAC Address ของตัวรับ (Receiver) ที่นี่ 🔴 ***
-//pooh
-//uint8_t broadcastAddress[] = {0x30, 0xC9, 0x22, 0x33, 0x19, 0x20}; 
-//dan
+
 uint8_t broadcastAddress[] = {0xD8, 0x13, 0x2A, 0x7F, 0x92, 0x5C};
 
-// WiFi ชื่อเดียวกับตัวรับ
-const char WIFI_SSID[] = "Mi 10T";
-const char WIFI_PASSWORD[] = "0123456789";
+const char WIFI_SSID[] = "116_2.4G";
+
+const char WIFI_PASSWORD[] = "0816978323";
 
 #define JOY_X_PIN 34
+
 #define JOY_Y_PIN 35
+
 #define JOY_SW_PIN 23
 
-#define WAKE_UP_THRESHOLD 800
-#define DEADZONE 250
+// Adjusted Thresholds for 3.3V
 
-// โครงสร้างข้อมูล
-typedef struct struct_message {
+#define WAKE_UP_THRESHOLD 500
+
+#define DEADZONE 150
+
+typedef struct struct_message
+
+{
+
   char type;
+
   int value;
+
 } struct_message;
 
-struct_message myData;
 esp_now_peer_info_t peerInfo;
+
 QueueHandle_t sendQueue;
 
 bool inAutoMode = true;
+
 int lastSentAngle = -1;
+
 int centerX, centerY;
 
-// *** เพิ่มตัวแปรสำหรับ Filter ***
-#define FILTER_SIZE 10 // อ่าน 10 ครั้งแล้วหาค่าเฉลี่ย
+// Filter Settings
+
+#define FILTER_SIZE 15
+
 int readingsX[FILTER_SIZE];
+
 int readingsY[FILTER_SIZE];
+
 int readIndex = 0;
+
 long totalX = 0;
+
 long totalY = 0;
 
-// --- Task 1: ส่งข้อมูล ESP-NOW ---
-void espNowTask(void *parameter) {
-  if (esp_now_init() != ESP_OK) vTaskDelete(NULL);
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) vTaskDelete(NULL);
+// --- Task 1: ESP-NOW Transmission ---
 
-  myData.type = 'A';
-  myData.value = 0;
-  esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+void espNowTask(void *parameter)
+
+{
+
+  if (esp_now_init() != ESP_OK)
+
+    vTaskDelete(NULL);
+
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+
+  peerInfo.channel = 0;
+
+  peerInfo.encrypt = false;
+
+  if (esp_now_add_peer(&peerInfo) != ESP_OK)
+
+    vTaskDelete(NULL);
 
   struct_message msgToSend;
-  while (true) {
-    if (xQueueReceive(sendQueue, &msgToSend, portMAX_DELAY) == pdTRUE) {
-        esp_now_send(broadcastAddress, (uint8_t *) &msgToSend, sizeof(msgToSend));
+
+  while (true)
+
+  {
+
+    if (xQueueReceive(sendQueue, &msgToSend, portMAX_DELAY) == pdTRUE)
+
+    {
+
+      esp_now_send(broadcastAddress, (uint8_t *)&msgToSend, sizeof(msgToSend));
     }
   }
 }
 
-// --- ฟังก์ชันอ่านจอยแบบนิ่งๆ (Smooth Read) ---
-void readJoystickSmooth(int *outX, int *outY) {
-  // ลบค่าเก่าออก
-  totalX = totalX - readingsX[readIndex];
-  totalY = totalY - readingsY[readIndex];
-  
-  // อ่านค่าใหม่
-  readingsX[readIndex] = analogRead(JOY_X_PIN);
-  readingsY[readIndex] = analogRead(JOY_Y_PIN);
-  
-  // รวมค่าใหม่
-  totalX = totalX + readingsX[readIndex];
-  totalY = totalY + readingsY[readIndex];
-  
-  // เลื่อน Index
-  readIndex = (readIndex + 1);
-  if (readIndex >= FILTER_SIZE) readIndex = 0;
+// --- Smoothing Function ---
 
-  // คืนค่าเฉลี่ย
+void readJoystickSmooth(int *outX, int *outY)
+
+{
+
+  totalX -= readingsX[readIndex];
+
+  totalY -= readingsY[readIndex];
+
+  readingsX[readIndex] = analogRead(JOY_X_PIN);
+
+  readingsY[readIndex] = analogRead(JOY_Y_PIN);
+
+  totalX += readingsX[readIndex];
+
+  totalY += readingsY[readIndex];
+
+  readIndex = (readIndex + 1) % FILTER_SIZE;
+
   *outX = totalX / FILTER_SIZE;
+
   *outY = totalY / FILTER_SIZE;
 }
 
-// --- Task 2: อ่าน Joystick (Uncomment และเพิ่ม Filter) ---
-void joystickTask(void *parameter) {
+// --- Task 2: 180-Degree Joystick Logic ---
+
+void joystickTask(void *parameter)
+
+{
+
   pinMode(JOY_SW_PIN, INPUT_PULLUP);
-  
-  // Init Filter Array
-  for (int i = 0; i < FILTER_SIZE; i++) {
+
+  // Pre-fill filter with center values
+
+  for (int i = 0; i < FILTER_SIZE; i++)
+
+  {
+
     readingsX[i] = centerX;
+
     readingsY[i] = centerY;
-    totalX += centerX;
-    totalY += centerY;
   }
 
-  while (true) {
+  totalX = (long)centerX * FILTER_SIZE;
+
+  totalY = (long)centerY * FILTER_SIZE;
+
+  while (true)
+
+  {
+
     int smoothX, smoothY;
-    readJoystickSmooth(&smoothX, &smoothY); // อ่านแบบนิ่งๆ
 
-    int mapX = smoothX - centerX;
-    int mapY = smoothY - centerY;
+    readJoystickSmooth(&smoothX, &smoothY);
 
-    double distance = sqrt((double)(mapX*mapX) + (double)(mapY*mapY));
+    // X and Y mapping
 
-    // 1. ปุ่มกด -> กลับ Auto
-    if (digitalRead(JOY_SW_PIN) == LOW) {
-      if (!inAutoMode) {
+    int mapX = centerX - smoothX;
+
+    int mapY = centerY - smoothY;
+
+    double distance = sqrt((double)mapX * mapX + (double)mapY * mapY);
+
+    // 1. Button Logic (Mode Switch)
+
+    if (digitalRead(JOY_SW_PIN) == LOW)
+
+    {
+
+      if (!inAutoMode)
+
+      {
+
         inAutoMode = true;
-        struct_message msg; msg.type = 'A'; msg.value = 0;
+
+        struct_message msg = {'A', 0};
+
         xQueueSend(sendQueue, &msg, 0);
-        Serial.println("Sent: AUTO");
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+
+        Serial.println(">> SYSTEM: AUTO MODE");
+
+        vTaskDelay(pdMS_TO_TICKS(500));
       }
     }
 
-    // 2. ขยับจอย -> Manual (Uncommented)
-    if (inAutoMode && distance > WAKE_UP_THRESHOLD) {
+    // 2. Wake-up Logic
+
+    if (inAutoMode && distance > WAKE_UP_THRESHOLD)
+
+    {
+
       inAutoMode = false;
-      Serial.println("Manual Mode Activated!");
+
+      Serial.println(">> SYSTEM: MANUAL MODE");
     }
 
-    // 3. ส่งค่า (Manual Mode) (Uncommented)
-    if (!inAutoMode) {
-        if (distance > DEADZONE) {
-            double radian = atan2(mapY, mapX);
-            int angle = radian * (180.0 / PI);
-            if (angle < 0) angle += 360;
-            if (angle > 180) angle = 360 - angle;
+    // 3. 180-Degree Calculation
 
-            // *** เพิ่ม Hysteresis: ต้องเปลี่ยนเกิน 2 องศาค่อยส่ง ***
-            if (abs(angle - lastSentAngle) > 2) { 
-                struct_message msg;
-                msg.type = 'J';
-                msg.value = angle;
-                xQueueSend(sendQueue, &msg, 0);
-                lastSentAngle = angle;
-            }
+    if (!inAutoMode && distance > DEADZONE)
+
+    {
+
+      // Use atan2 to get the full angle
+
+      double radian = atan2(mapY, mapX);
+
+      int angle = (int)(radian * 180.0 / PI);
+
+      // Map the joystick sweep to a 0-180 servo range
+
+      // We clamp it here so only the upper arc works.
+
+      // make sure that the angle is between 0 and 180
+
+      if (mapY < 0)
+      {
+
+        if (mapX > 0)
+
+          angle = 0;
+
+        if (mapX < 0)
+
+          angle = 180;
+      }
+
+      // Hysteresis: only send if moved > 2 degrees
+
+      if (abs(angle - lastSentAngle) > 2)
+
+      {
+
+        struct_message msg = {'J', angle};
+
+        if (xQueueSend(sendQueue, &msg, 0) == pdTRUE)
+
+        {
+
+          lastSentAngle = angle;
+
+          Serial.printf("POS -> X:%d Y:%d | SERVO ANGLE:%d\n", mapX, mapY, angle);
         }
+      }
     }
-    
-    // อ่านถี่ๆ เพื่อให้ค่าเฉลี่ยแม่นยำ (5ms)
-    vTaskDelay(5 / portTICK_PERIOD_MS);
+
+    vTaskDelay(pdMS_TO_TICKS(15));
   }
 }
 
-void setup() {
+void setup()
+
+{
+
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  Serial.begin(921600);
-  
+
+  Serial.begin(115200);
+
+  // Critical for 3.3V Joystick Power
+
+  analogSetAttenuation(ADC_11db);
+
   delay(1000);
+
   centerX = analogRead(JOY_X_PIN);
+
   centerY = analogRead(JOY_Y_PIN);
 
-  // เช็คสายขาด
-  if(centerY < 100) Serial.println("WARNING: JOYSTICK DISCONNECTED!");
+  Serial.printf("Calibration: X=%d, Y=%d\n", centerX, centerY);
 
   WiFi.mode(WIFI_STA);
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+
+  int retry = 0;
+
+  while (WiFi.status() != WL_CONNECTED && retry < 15)
+
+  {
+
+    delay(500);
+
+    Serial.print(".");
+
+    retry++;
+  }
+
   Serial.println("\nReady!");
 
   sendQueue = xQueueCreate(20, sizeof(struct_message));
-  xTaskCreate(espNowTask, "ESP-NOW", 4096, NULL, 1, NULL);
-  xTaskCreate(joystickTask, "Joy", 4096, NULL, 1, NULL);
+
+  // Use Core 0 for sensors and Core 1 for Radio/WiFi
+
+  xTaskCreatePinnedToCore(espNowTask, "ESP-NOW", 4096, NULL, 2, NULL, 1);
+
+  xTaskCreatePinnedToCore(joystickTask, "Joystick", 4096, NULL, 1, NULL, 0);
 }
 
-void loop() {}
+void loop()
+
+{
+
+  // FreeRTOS takes care of the rest
+}
