@@ -25,5 +25,5 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 # Gantt chart
 <img width="1432" height="552" alt="image" src="https://github.com/user-attachments/assets/991beee7-ea30-486a-81d7-eeb9a02f639a" />
 
-#Model design
+
 
