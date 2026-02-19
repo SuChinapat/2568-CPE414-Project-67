@@ -27,11 +27,11 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 
 # Model design
 <img width="920" height="530" alt="Screenshot 2026-02-16 172750" src="https://github.com/user-attachments/assets/37d5edc1-08b3-400b-ac14-2b73ea90bc9d" />
-part 1
+<p>part 1</p>
 <img width="749" height="457" alt="Screenshot 2026-02-16 171644" src="https://github.com/user-attachments/assets/c2ae0c45-965f-42c7-9e33-da298080c027" />
-part 2
+<p>part 2</p>
 <img width="942" height="513" alt="Screenshot 2026-02-16 171755" src="https://github.com/user-attachments/assets/0d3d6af4-36c6-446b-b076-db7446b46921" />
-part 3
-![1000013152_9d65f85b88a395e9459990d6e5f107b9-18_2_2569 21_43_09](https://github.com/user-attachments/assets/0e948c2b-9a71-4f03-9ea3-ca0003c59453)
+<p>part 3</p>
+[1000013152_9d65f85b88a395e9459990d6e5f107b9-18_2_2569 21_43_09](https://github.com/user-attachments/assets/d5a28481-ddf8-4472-83c4-d4e395c9390b)
 <p>part 1 + part 2</p>
-![1000013153_c4663ae73659886a0c101f26fee2b6ea-18_2_2569 21_43_09](https://github.com/user-attachments/assets/5de6a63e-e4e5-493e-98d9-e227a32f3d0f)
+
