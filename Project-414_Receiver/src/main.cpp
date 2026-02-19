@@ -15,8 +15,8 @@
 #define DFPLAYER_TX_PIN 17
 
 // ---------------- WIFI ----------------
-const char WIFI_SSID[] = "Mi 10T";
-const char WIFI_PASSWORD[] = "0123456789";
+const char WIFI_SSID[] = "116_2.4G";
+const char WIFI_PASSWORD[] = "0816978323";
 
 // ---------------- JOY CONFIG ----------------
 #define DEADZONE 2
@@ -70,6 +70,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
 }
 
 // ---------------- DISTANCE ----------------
+// still not showing correctly
 long measureDistanceFast() {
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
@@ -79,7 +80,7 @@ long measureDistanceFast() {
   long dist = duration * 0.034 / 2;
 
   if (dist > 1 && dist < 200) return dist;
-  return currentDistance;
+  return 0; // Invalid 
 }
 
 // ---------------- RADAR TASK ----------------
@@ -125,7 +126,7 @@ void radarTask(void *parameter) {
       myServo.write(currentAngle);
 
       currentDistance = measureDistanceFast();
-      vTaskDelay(30 / portTICK_PERIOD_MS);
+      vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }
 }
