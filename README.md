@@ -16,7 +16,8 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 - WebServer
 -
 # Architectural design
-<img width="543" height="560" alt="image" src="https://github.com/user-attachments/assets/6ecf9b19-751d-4d65-bb82-ba2ed18d06a1" />
+
+<img width="1016" height="1079" alt="Architectural design" src="https://github.com/user-attachments/assets/f34030dc-4553-4d75-b9ab-1c224404c034" />
 
 # Flowchart
 -  sender
