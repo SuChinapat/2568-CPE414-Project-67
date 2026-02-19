@@ -19,12 +19,16 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 <img width="543" height="560" alt="image" src="https://github.com/user-attachments/assets/6ecf9b19-751d-4d65-bb82-ba2ed18d06a1" />
 
 # Flowchart
+-  sender
 <img width="479" height="1079" alt="image" src="https://github.com/user-attachments/assets/ed3d2edf-7984-4727-87de-d8bc4b10cf24" />
 
-<img width="599" height="1079" alt="image" src="https://github.com/user-attachments/assets/35bae735-823f-418c-92aa-196202ac9d2a" />
+- Receiver
+  <img width="7459" height="8192" alt="Flowchart_Receiver" src="https://github.com/user-attachments/assets/a467482f-5237-46f5-818f-f2ed725554ed" />
+
 
 # Gantt chart
-<img width="1432" height="552" alt="image" src="https://github.com/user-attachments/assets/991beee7-ea30-486a-81d7-eeb9a02f639a" />
+
+<img width="1280" height="465" alt="Gantt chart" src="https://github.com/user-attachments/assets/25ec31de-01b0-422b-a5f0-ac96b09624b1" />
 
 # Waterfall Model
 <img width="251" height="201" alt="Model" src="https://github.com/user-attachments/assets/ec1f7d79-7831-4553-9c89-b3fe383ee2fc" />
