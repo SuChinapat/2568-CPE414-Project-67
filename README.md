@@ -34,4 +34,5 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 <p>part 3</p>
 <img width="942" height="513" alt="Screenshot 2026-02-16 171755" src="https://github.com/user-attachments/assets/d5a28481-ddf8-4472-83c4-d4e395c9390b" />
 <p>part 1 + part 2</p>
-
+<img width="942" height="513" alt="Screenshot 2026-02-16 171755" src="https://github.com/user-attachments/assets/50a2bb68-c22d-4895-a65f-0a8e3e9d0579" />
+<p>part 3</p>
