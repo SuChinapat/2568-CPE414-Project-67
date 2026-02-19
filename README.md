@@ -26,5 +26,9 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 <img width="1432" height="552" alt="image" src="https://github.com/user-attachments/assets/991beee7-ea30-486a-81d7-eeb9a02f639a" />
 
 # Model design
-
-
+<img width="920" height="530" alt="Screenshot 2026-02-16 172750" src="https://github.com/user-attachments/assets/37d5edc1-08b3-400b-ac14-2b73ea90bc9d" />
+part 1
+<img width="749" height="457" alt="Screenshot 2026-02-16 171644" src="https://github.com/user-attachments/assets/c2ae0c45-965f-42c7-9e33-da298080c027" />
+part 2
+<img width="942" height="513" alt="Screenshot 2026-02-16 171755" src="https://github.com/user-attachments/assets/0d3d6af4-36c6-446b-b076-db7446b46921" />
+part 3
