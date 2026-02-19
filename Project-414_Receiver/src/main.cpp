@@ -80,7 +80,8 @@ long measureDistanceFast() {
   long dist = duration * 0.034 / 2;
 
   if (dist > 1 && dist < 200) return dist;
-  return 0; // Invalid 
+  return 0; // Invalid
+  //return currentDistance
 }
 
 // ---------------- RADAR TASK ----------------
@@ -126,7 +127,7 @@ void radarTask(void *parameter) {
       myServo.write(currentAngle);
 
       currentDistance = measureDistanceFast();
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      vTaskDelay(30 / portTICK_PERIOD_MS);
     }
   }
 }
