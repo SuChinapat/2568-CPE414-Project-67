@@ -48,8 +48,6 @@ QueueHandle_t sendQueue;
 
 bool inAutoMode = true;
 
-int lastSentAngle = -1;
-
 int centerX, centerY;
 
 // Filter Settings
@@ -228,22 +226,14 @@ void joystickTask(void *parameter)
           angle = 180;
       }
 
-      // Hysteresis: only send if moved > 2 degrees
+      // Invert angle range: 0-180 becomes 180-0
+      angle = 180 - angle;
 
-      if (abs(angle - lastSentAngle) > 2)
+      struct_message msg = {'J', angle};
 
+      if (xQueueSend(sendQueue, &msg, 0) == pdTRUE)
       {
-
-        struct_message msg = {'J', angle};
-
-        if (xQueueSend(sendQueue, &msg, 0) == pdTRUE)
-
-        {
-
-          lastSentAngle = angle;
-
-          Serial.printf("POS -> X:%d Y:%d | SERVO ANGLE:%d\n", mapX, mapY, angle);
-        }
+        Serial.printf("POS -> X:%d Y:%d | SERVO ANGLE:%d\n", mapX, mapY, angle);
       }
     }
 
@@ -302,6 +292,5 @@ void setup()
 void loop()
 
 {
-
   // FreeRTOS takes care of the rest
 }
