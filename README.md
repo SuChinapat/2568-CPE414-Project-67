@@ -25,6 +25,18 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 # Gantt chart
 <img width="1432" height="552" alt="image" src="https://github.com/user-attachments/assets/991beee7-ea30-486a-81d7-eeb9a02f639a" />
 
+# Waterfall Model
+<img width="251" height="201" alt="Model" src="https://github.com/user-attachments/assets/ec1f7d79-7831-4553-9c89-b3fe383ee2fc" />
+
+# Resource
+[DFR0299-DFPlayer-Mini-Manual.pdf](https://github.com/user-attachments/files/25419010/DFR0299-DFPlayer-Mini-Manual.pdf)
+
+[000036 - datasheet KY-023-Joy-IT.pdf](https://github.com/user-attachments/files/25419027/000036.-.datasheet.KY-023-Joy-IT.pdf)
+
+[ESPNOW.pdf](https://github.com/user-attachments/files/25419050/ESPNOW.pdf)
+
+[Webserver.pdf](https://github.com/user-attachments/files/25419073/Webserver.pdf)
+
 # Model design
 <img width="920" height="530" alt="Screenshot 2026-02-16 172750" src="https://github.com/user-attachments/assets/37d5edc1-08b3-400b-ac14-2b73ea90bc9d" />
 <p>part 1</p>
