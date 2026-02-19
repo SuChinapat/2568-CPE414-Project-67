@@ -32,3 +32,6 @@ part 1
 part 2
 <img width="942" height="513" alt="Screenshot 2026-02-16 171755" src="https://github.com/user-attachments/assets/0d3d6af4-36c6-446b-b076-db7446b46921" />
 part 3
+![1000013152_9d65f85b88a395e9459990d6e5f107b9-18_2_2569 21_43_09](https://github.com/user-attachments/assets/0e948c2b-9a71-4f03-9ea3-ca0003c59453)
+<p>part 1 + part 2</p>
+![1000013153_c4663ae73659886a0c101f26fee2b6ea-18_2_2569 21_43_09](https://github.com/user-attachments/assets/5de6a63e-e4e5-493e-98d9-e227a32f3d0f)
