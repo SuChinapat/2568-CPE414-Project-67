@@ -21,7 +21,8 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 
 # Flowchart
 -  sender
-<img width="479" height="1079" alt="image" src="https://github.com/user-attachments/assets/ed3d2edf-7984-4727-87de-d8bc4b10cf24" />
+  <img width="2380" height="8191" alt="Sender" src="https://github.com/user-attachments/assets/73fcaac7-09aa-4a75-abf3-4c304af29186" />
+
 
 - Receiver
   <img width="7459" height="8192" alt="Flowchart_Receiver" src="https://github.com/user-attachments/assets/a467482f-5237-46f5-818f-f2ed725554ed" />
