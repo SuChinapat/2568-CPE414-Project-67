@@ -32,8 +32,9 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 
 <img width="1280" height="465" alt="Gantt chart" src="https://github.com/user-attachments/assets/25ec31de-01b0-422b-a5f0-ac96b09624b1" />
 
-# Waterfall Model
-<img width="251" height="201" alt="Model" src="https://github.com/user-attachments/assets/ec1f7d79-7831-4553-9c89-b3fe383ee2fc" />
+# Adaptive waterfall model
+<img width="570" height="509" alt="waterfall" src="https://github.com/user-attachments/assets/094a7ea1-8df1-4261-a8b6-fa02c29a8d3b" />
+
 
 # Resource
 [DFR0299-DFPlayer-Mini-Manual.pdf](https://github.com/user-attachments/files/25419010/DFR0299-DFPlayer-Mini-Manual.pdf)
