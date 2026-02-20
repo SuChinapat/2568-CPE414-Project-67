@@ -11,8 +11,8 @@
 #define TRIG_PIN 27
 #define ECHO_PIN 14
 #define SERVO_PIN 13
-#define DFPLAYER_RX_PIN 25
-#define DFPLAYER_TX_PIN 26
+#define DFPLAYER_RX_PIN 17
+#define DFPLAYER_TX_PIN 16
 #define mySerial Serial1
 
 
@@ -231,7 +231,7 @@ void setup() {
   esp_now_register_recv_cb(OnDataRecv);
 
   #if (defined ESP32)
-  mySerial.begin(9600, SERIAL_8N1, /*rx =*/17, /*tx =*/16);
+  mySerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
   #else
   mySerial.begin(9600);
   #endif
