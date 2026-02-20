@@ -226,8 +226,8 @@ void joystickTask(void *parameter)
           angle = 180;
       }
 
-      // Invert angle range: 0-180 becomes 180-0
-      angle = 180 - angle;
+      //// Invert angle range: 0-180 becomes 180-0
+      //angle = 180 - angle;
 
       struct_message msg = {'J', angle};
 
