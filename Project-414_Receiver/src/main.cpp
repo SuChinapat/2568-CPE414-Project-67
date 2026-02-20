@@ -11,12 +11,14 @@
 #define TRIG_PIN 27
 #define ECHO_PIN 14
 #define SERVO_PIN 13
-#define DFPLAYER_RX_PIN 16
-#define DFPLAYER_TX_PIN 17
+#define DFPLAYER_RX_PIN 25
+#define DFPLAYER_TX_PIN 26
+#define mySerial Serial1
+
 
 // ---------------- WIFI ----------------
-const char WIFI_SSID[] = "116_2.4G";
-const char WIFI_PASSWORD[] = "0816978323";
+const char WIFI_SSID[] = "vivo X200";
+const char WIFI_PASSWORD[] = "8008008000";
 
 // ---------------- JOY CONFIG ----------------
 #define DEADZONE 2
@@ -33,7 +35,6 @@ struct_message myData;
 // ---------------- OBJECTS ----------------
 WebServer server(80);
 Servo myServo;
-HardwareSerial mySerial(1);
 DFRobotDFPlayerMini myDFPlayer;
 
 // ---------------- GLOBAL ----------------
@@ -42,7 +43,6 @@ volatile int currentDistance = 0;
 volatile bool isJoyMode = false;
 volatile int joyTargetAngle = 90;
 volatile unsigned long lastJoyMoveTime = 0;
-volatile bool isSystemArmed = true;
 
 float smoothAngle = 90.0;
 bool isPlaying = false;
@@ -70,7 +70,6 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
 }
 
 // ---------------- DISTANCE ----------------
-// still not showing correctly
 long measureDistanceFast() {
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
@@ -80,8 +79,7 @@ long measureDistanceFast() {
   long dist = duration * 0.034 / 2;
 
   if (dist > 1 && dist < 200) return dist;
-  return 0; // Invalid
-  //return currentDistance
+  return currentDistance;
 }
 
 // ---------------- RADAR TASK ----------------
@@ -134,16 +132,13 @@ void radarTask(void *parameter) {
 
 // ---------------- AUDIO TASK ----------------
 void audioTask(void *parameter) {
-  mySerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
+  
 
-  if (myDFPlayer.begin(mySerial)) {
-    myDFPlayer.volume(15);
-  }
 
   while (true) {
-    bool detect = (currentDistance > 1 && currentDistance < 40 && isSystemArmed);
-
+    bool detect = (currentDistance > 1 && currentDistance < 40);
     if (detect && !isPlaying) {
+      myDFPlayer.volume(20);
       myDFPlayer.play(1);
       isPlaying = true;
       vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -214,7 +209,7 @@ void serverTask(void *parameter) {
 // ---------------- SETUP ----------------
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   // Hybrid Mode: AP+STA
   WiFi.mode(WIFI_AP_STA);
@@ -234,6 +229,18 @@ void setup() {
     return;
   }
   esp_now_register_recv_cb(OnDataRecv);
+
+  #if (defined ESP32)
+  mySerial.begin(9600, SERIAL_8N1, /*rx =*/17, /*tx =*/16);
+  #else
+  mySerial.begin(9600);
+  #endif
+
+  if (!myDFPlayer.begin(mySerial, true, true)) {
+    Serial.println("DFPlayer Error");
+    while(true);
+  }
+  Serial.println(F("DFPlayer Mini online."));
 
   xTaskCreate(radarTask, "Radar", 4096, NULL, 1, NULL);
   xTaskCreate(audioTask, "Audio", 4096, NULL, 1, NULL);
