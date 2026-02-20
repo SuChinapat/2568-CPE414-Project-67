@@ -1,4 +1,4 @@
-# Wireless Semi-Auto Object Detection with Radar
+<img width="822" height="900" alt="FlowChartRecv" src="https://github.com/user-attachments/assets/fcfaea6f-c924-4f1a-b9d3-fc5ef67a65a4" /># Wireless Semi-Auto Object Detection with Radar
 แบบจำลองเรดาห์ โดย Servo motor จะหมุน 180 องศา โดยมี Ultrasonic sensor ติดอยู่ข้างบน สามารถใช้ Joy stick ควบคุม Servo motor ให้หมุนแบบ manual เพื่อค้นหาวัตถุที่เข้ามาแบบ Real time ได้และจะมีระบบแสดงหน้าจอเรดาห์ผ่านหน้าเว็บแจ้งเตือนด้วยเสียงด้วย Speaker เมื่อพบวัตถุในระยะ 
 
 https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content=DAG-9VDvNFE&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
@@ -25,7 +25,7 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 
 
 - Receiver
-  <img width="7459" height="8192" alt="Flowchart_Receiver" src="https://github.com/user-attachments/assets/a467482f-5237-46f5-818f-f2ed725554ed" />
+  <img width="822" height="900" alt="FlowChartRecv" src="https://github.com/user-attachments/assets/cdfaff2a-7866-40e8-8f67-2d93a09d60e3" />
 
 
 # Gantt chart
