@@ -25,7 +25,7 @@ https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content
 
 
 - Receiver
-  <img width="822" height="900" alt="FlowChartRecv" src="https://github.com/user-attachments/assets/cdfaff2a-7866-40e8-8f67-2d93a09d60e3" />
+  <img width="7459" height="8192" alt="Flowchart_Receiver" src="https://github.com/user-attachments/assets/c6e29f62-7ce1-4cba-b05b-50e51a6cf660" />
 
 
 # Gantt chart
