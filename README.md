@@ -1,7 +1,7 @@
 # Wireless Semi-Auto Object Detection with Radar
 แบบจำลองเรดาห์ โดย Servo motor จะหมุน 180 องศา โดยมี Ultrasonic sensor ติดอยู่ข้างบน สามารถใช้ Joy stick ควบคุม Servo motor ให้หมุนแบบ manual เพื่อค้นหาวัตถุที่เข้ามาแบบ Real time ได้และจะมีระบบแสดงหน้าจอเรดาห์ผ่านหน้าเว็บแจ้งเตือนด้วยเสียงด้วย Speaker เมื่อพบวัตถุในระยะ 
-- Update Week resentation
 
+#Update Week resentation
 https://www.canva.com/design/DAG-9VDvNFE/tZx-HrZsbmGurQaTwDbbLg/edit?utm_content=DAG-9VDvNFE&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
 # Final presentation
 https://www.canva.com/design/DAHBx0z4tiQ/3GWDTtHWLIG9aWm1IZIu2g/edit?utm_content=DAHBx0z4tiQ&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
